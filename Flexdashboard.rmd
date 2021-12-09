@@ -20,6 +20,7 @@ runtime: shiny
 # 2) Move formatting/manipulation from markdown back to update script (and possibly back to initial input script from s-sheet)
 
 library(tidyverse)
+library(lubridate)
 library(DBI)
 library(flexdashboard)
 library(DT)
@@ -61,7 +62,12 @@ dbReadTable(con, "NCT") %>%
   filter(NCTId %in% Ids$NCT_Ids) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date) %>%
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         PrimaryCompletionDate = mdy(PrimaryCompletionDate),
+         CompletionDate = mdy(CompletionDate),
+         ResultsFirstSubmitDate = mdy(ResultsFirstSubmitDate),
+         LastUpdatePostDate = mdy(LastUpdatePostDate)
+         )%>% 
   rename(
     Guideline = Guideline.number,
     `NCT ID` = NCTId,
@@ -86,7 +92,10 @@ dbReadTable(con, "ISRCTN") %>%
   filter(ISRCTN_No %in% Ids$ISRCTN_Ids) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date) %>%
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         Results_date_completed = dmy(Results_date_completed),
+         Results_date_posted = dmy(Results_date_posted),
+         Results_date_first_publication = dmy(Results_date_first_publication)) %>% 
   rename(
     Guideline = Guideline.number,
     `ISRCTN ID` = ISRCTN_No,
@@ -180,7 +189,11 @@ compare_df(new_df,
          URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
          Title = str_trunc(BriefTitle, 80),
          Condition = str_trunc(Condition, 30)) %>% 
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         CompletionDate = mdy(CompletionDate),
+         ResultsFirstSubmitDate = mdy(ResultsFirstSubmitDate),
+         LastUpdatePostDate = mdy(LastUpdatePostDate)
+         ) %>% 
   select(
     `Change` = chng_type,
     Guideline = Guideline.number,
@@ -222,7 +235,11 @@ compare_df(new_df,
            stop_on_error = FALSE)$comparison_df %>%
   mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
          Title = str_trunc(Scientific_Title,75)) %>% 
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         Results_date_completed = dmy(Results_date_completed),
+         Results_date_posted = dmy(Results_date_posted),
+         Results_date_first_publication = dmy(Results_date_first_publication)
+         ) %>% 
   select(Change = chng_type,
          Guideline = Guideline.number,
          URL,
