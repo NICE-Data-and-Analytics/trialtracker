@@ -81,7 +81,9 @@ dbReadTable(con, "NCT") %>%
     `Last Update` = LastUpdatePostDate,
     `Other URL` = SeeAlsoLinkURL
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE),
+            filter = "top"
+            )
 ```
 
 ### ISRCTN
@@ -108,7 +110,7 @@ dbReadTable(con, "ISRCTN") %>%
     `Results posted date` = Results_date_posted,
     `Results published date` = Results_date_first_publication
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### NIHR
@@ -127,7 +129,7 @@ dbReadTable(con, "NIHR") %>%
     Status = project_status,
     `End Date` = end_date
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### Clinicaltrials.eu
@@ -151,7 +153,7 @@ dbReadTable(con, "EU") %>%
     `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
     `Sponsor ID` = a41_sponsors_protocol_code_number
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
 
@@ -209,7 +211,7 @@ compare_df(new_df,
     `Last Update Date` = LastUpdatePostDate,
   ) %>% 
 datatable(
-  options = list(bPaginate = FALSE),
+  options = list(bPaginate = FALSE, scrollY = TRUE),
                  filter = "top")
   
 
@@ -252,7 +254,7 @@ compare_df(new_df,
          `Results Completed` = Results_date_completed,
          `Results Posted` = Results_date_posted,
          `Results Published` = Results_date_first_publication) %>% 
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
 
@@ -290,7 +292,7 @@ compare_df(
     Status = project_status,
     `End Date` = end_date
          ) %>% 
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
 
@@ -327,7 +329,7 @@ compare_df(
     Status = p_end_of_trial_status,
     Acronym = a32_name_or_abbreviated_title_of_the_trial_where_available,
     Title) %>% 
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
 
@@ -359,7 +361,7 @@ dbReadTable(con, "NCT_PM") %>%
     Journal =  jabbrv,
     Condition = Short..working.title.
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### ISRCTN
@@ -382,7 +384,7 @@ dbReadTable(con, "ISRCTN_PM") %>%
     Journal =  jabbrv,
     Condition = Short..working.title. ##cut this out due to non-UTF-8 character
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### NIHR
@@ -405,7 +407,7 @@ dbReadTable(con, "NIHR_PM") %>%
     Journal =  jabbrv,
     Condition = Short..working.title.
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### Clinicaltrials.eu
@@ -429,7 +431,7 @@ if ("EU_PM" %in% dbListTables(con)) {
       Journal =  jabbrv,
       Condition = Short..working.title.,
     ) %>%
-    datatable(options = list(bPaginate = FALSE), filter = "top")
+    datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 }
 ```
 
@@ -790,7 +792,7 @@ dbReadTable(con, "NCT_rxv") %>%
     `Last Update` = LastUpdatePostDate,
     `Other URL` = SeeAlsoLinkURL
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### ISRCTN Archive
@@ -811,7 +813,7 @@ dbReadTable(con, "ISRCTN_rxv") %>%
     `Results posted date` = Results_date_posted,
     `Results published date` = Results_date_first_publication,
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### NIHR Archive
@@ -827,7 +829,7 @@ dbReadTable(con, "NIHR_rxv") %>%
     Status = project_status,
     `End Date` = end_date
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
 ### EU Archive
@@ -846,5 +848,5 @@ dbReadTable(con, "EU_rxv") %>%
     `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
     `Sponsor ID` = a41_sponsors_protocol_code_number
   ) %>%
-  datatable(options = list(bPaginate = FALSE), filter = "top")
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
