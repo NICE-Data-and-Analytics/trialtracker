@@ -435,7 +435,7 @@ if ("EU_PM" %in% dbListTables(con)) {
 }
 ```
 
-Add/Remove Trials
+Add/Remove Trials and Trial Comments
 ======================================================
 
 Row {.tabset .tabset-fade}
@@ -645,7 +645,7 @@ Select relevant registry and trial ID reference number below, along with any com
 inputPanel(
     radioButtons(
       "registry_remove",
-      label = "registry",
+      label = "Registry",
       choices = c(
         "Clinicaltrials.gov" = "NCT_Ids",
         "ISRCTN" = "ISRCTN_Ids",
@@ -671,9 +671,9 @@ mainPanel(
 observeEvent(input$registry_remove, {
 
   choices_list <- dbReadTable(con, "Trial_Ids") %>%
-    select(input$registry_remove) %>%
+    select(ids = input$registry_remove) %>%
     drop_na() %>%
-    arrange(input$registry_remove)
+    arrange(str_remove_all(ids, "[A-Z]|-"))
 
   updateSelectInput(session, "ID_remove", choices = choices_list)
 
@@ -737,7 +737,7 @@ observeEvent(input$button_archive, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Archiving Trial - please wait while the dashboard refreshes in background....")
 
   pulled_trial_data <- dbGetQuery(con, exp_archive_pull()) %>%
-    mutate("Comments" = as.character(input$comments_archive)) %>%
+    mutate("Archiving_Comments" = as.character(input$comments_archive)) %>%
     slice_max(Query_Date)
 
   #write to db (append)
@@ -758,8 +758,115 @@ observeEvent(input$button_archive, {
   shinybusy::remove_modal_spinner()
 
   #return some success message
-  output$success_archive <- renderText("Trial Successfully Archived. It should disappear from live lists and appear in archive  on browser refresh")
+  output$success_archive <- renderText("Trial Successfully Archived. It should disappear from live lists and appear in archive on browser refresh")
 
+})
+
+```
+
+### Trial Comments
+
+Select trial and amend comments in the box below
+
+``` {r TrialComments}
+
+inputPanel(
+    radioButtons(
+      "registry_comment",
+      label = "Registry",
+      choices = c(
+        "Clinicaltrials.gov" = "NCT_Ids",
+        "ISRCTN" = "ISRCTN_Ids",
+        "NIHR" = "NIHR_Ids",
+        "Clinicaltrials.eu" = "EU_Ids"
+      )
+    ),
+    selectInput('ID_comment',
+                label = 'Select Trial ID reference number',
+                choices = ""),
+    textInput("trial_comments", label = "Comments", placeholder = "Trial Comments"),
+    actionButton("button_comment", "Amend Comments")
+  )
+
+mainPanel(
+  #textOutput("comment_sql"),
+  #textOutput("fetch_comment_SQL"),
+  textOutput("success_comment")
+  )
+
+observeEvent(input$registry_comment, {
+
+  choices_list <- dbReadTable(con, "Trial_Ids") %>%
+    select(ids = input$registry_comment) %>%
+    drop_na() %>%
+    arrange(str_remove_all(ids, "[A-Z]|-"))
+
+  updateSelectInput(session, "ID_comment", choices = choices_list)
+  
+})
+
+sql_comments_pull <- "SELECT Comments FROM ?Orig_Table WHERE [?ColID] = ?comment_id AND Query_Date IN (SELECT max(Query_Date) FROM ?Orig_Table)"
+
+exp_comment_pull <- reactive({
+    sqlInterpolate(
+      con,
+      sql_comments_pull,
+      Orig_Table = SQL(str_sub(input$registry_comment, end=-5)),
+      ColID = SQL(case_when(input$registry_comment == "NCT_Ids" ~ "NCTId",
+                          input$registry_comment == "NIHR_Ids" ~ "project_id",
+                          input$registry_comment == "ISRCTN_Ids" ~ "ISRCTN_No",
+                          input$registry_comment == "EU_Ids" ~ "EU_Ids")),
+      comment_id = input$ID_comment
+  )
+})
+
+pulled_comments <- reactive({
+  dbGetQuery(con, exp_comment_pull()) %>% as.character()
+  })  
+  
+output$comment_sql <- renderText(exp_comment_pull())
+output$fetch_comment_SQL <- renderText(pulled_comments())
+
+observeEvent(input$ID_comment, {
+  
+  updateTextInput(session, "trial_comments", value = pulled_comments())
+  
+})
+
+
+observeEvent(input$button_comment, {
+  
+  #Add spinner
+  show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Amending Comments - please wait while the dashboard refreshes in background....")
+  
+  #Take contents of button
+  comment_text <- input$trial_comments
+  
+  #Derive SQL to insert into table
+  comment_insert_sql <- "UPDATE ?TabID SET Comments = ?comment_text WHERE ?ID_name == ?id_no"
+  
+  update_comment_sql <- 
+    sqlInterpolate(con,
+                   comment_insert_sql,
+                   TabID = SQL(str_sub(input$registry_comment, end=-5)),
+                   comment_text = comment_text,
+                   ID_name = SQL(case_when(input$registry_comment == "NCT_Ids" ~ "NCTId",
+                          input$registry_comment == "NIHR_Ids" ~ "project_id",
+                          input$registry_comment == "ISRCTN_Ids" ~ "ISRCTN_No",
+                          input$registry_comment == "EU_Ids" ~ "EU_Ids")),
+                   id_no = input$ID_comment
+                   )
+  
+  #Action SQL
+  dbExecute(con, update_comment_sql)
+  
+  #Remove spinner
+  remove_modal_spinner()
+
+  #return some success message
+  output$success_comment <- renderText("Comments Successfully Updated - please refresh dashboard to see updated comments")
+
+  
 })
 
 ```
