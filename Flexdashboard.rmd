@@ -61,7 +61,7 @@ Row {.tabset .tabset-fade}
 dbReadTable(con, "NCT") %>%
   filter(NCTId %in% Ids$NCT_Ids) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
-  select(-Query_Date) %>%
+  select(-Query_Date, -SeeAlsoLinkURL) %>%
   mutate(across(.fns = clean_UTF),
          PrimaryCompletionDate = mdy(PrimaryCompletionDate),
          CompletionDate = mdy(CompletionDate),
@@ -79,7 +79,6 @@ dbReadTable(con, "NCT") %>%
     `Results Submit Date` = ResultsFirstSubmitDate,
     `Results Post Date` = ResultsFirstPostDate,
     `Last Update` = LastUpdatePostDate,
-    `Other URL` = SeeAlsoLinkURL
   ) %>%
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE),
             filter = "top"
@@ -141,7 +140,7 @@ dbReadTable(con, "EU") %>%
   filter(short_id %in% Ids$EU_Ids) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(
-    -Query_Date, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids
+    -Query_Date, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids, -short_id
   ) %>%
   mutate(across(.fns = clean_UTF)) %>% 
   distinct() %>% 
@@ -737,7 +736,7 @@ observeEvent(input$button_archive, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Archiving Trial - please wait while the dashboard refreshes in background....")
 
   pulled_trial_data <- dbGetQuery(con, exp_archive_pull()) %>%
-    mutate("Archiving_Comments" = as.character(input$comments_archive)) %>%
+    mutate("Archiving_Comments" = paste(Comments, as.character(input$comments_archive)), collapse = " ") %>%
     slice_max(Query_Date)
 
   #write to db (append)
@@ -885,7 +884,15 @@ Row {.tabset .tabset-fade}
 ``` {r CG.gov archive}
 
 dbReadTable(con, "NCT_rxv") %>%
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         `Archive Date` = as_date(as.numeric(Query_Date))) %>% 
+  select(
+         -SeeAlsoLinkURL,
+         -Query_Date,
+         ) %>% 
+  select(`Archive Date`,
+         everything(),
+         `Archiving Comments` = Archiving_Comments) %>% 
   rename(
     Guideline = Guideline.number,
     `NCT ID` = NCTId,
@@ -896,10 +903,10 @@ dbReadTable(con, "NCT_rxv") %>%
     `Completion Date` = CompletionDate,
     `Results Submit Date` = ResultsFirstSubmitDate,
     `Results Post Date` = ResultsFirstPostDate,
-    `Last Update` = LastUpdatePostDate,
-    `Other URL` = SeeAlsoLinkURL
+    `Last Update` = LastUpdatePostDate
   ) %>%
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
 
 ### ISRCTN Archive
@@ -907,7 +914,11 @@ dbReadTable(con, "NCT_rxv") %>%
 ```{r ISRCTN archive table}
 
 dbReadTable(con, "ISRCTN_rxv") %>%
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         `Archive Date` = as_date(as.numeric(Query_Date))) %>% 
+  select(-Query_Date) %>% 
+  select(`Archive Date`,
+         everything()) %>% 
   rename(
     Guideline = Guideline.number,
     `ISRCTN ID` = ISRCTN_No,
@@ -919,8 +930,10 @@ dbReadTable(con, "ISRCTN_rxv") %>%
     `Results summary` = Results_summary,
     `Results posted date` = Results_date_posted,
     `Results published date` = Results_date_first_publication,
+    `Archiving Comments` = Archiving_Comments
   ) %>%
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
 
 ### NIHR Archive
@@ -928,15 +941,21 @@ dbReadTable(con, "ISRCTN_rxv") %>%
 ``` {r NIHR archive table}
 
 dbReadTable(con, "NIHR_rxv") %>%
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         `Archive Date` = as_date(as.numeric(Query_Date))) %>% 
+  select(-Query_Date) %>% 
+  select(`Archive Date`,
+         everything()) %>% 
   rename(
     Guideline = Guideline.number,
     `NIHR ID` = project_id,
     `Project Title` = project_title,
     Status = project_status,
-    `End Date` = end_date
+    `End Date` = end_date,
+    `Archiving Comments` = Archiving_Comments
   ) %>%
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
 
 ### EU Archive
@@ -953,7 +972,9 @@ dbReadTable(con, "EU_rxv") %>%
     `End of Trial Status` = p_end_of_trial_status,
     Title = a3_full_title_of_the_trial,
     `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
-    `Sponsor ID` = a41_sponsors_protocol_code_number
+    `Sponsor ID` = a41_sponsors_protocol_code_number,
+    `Archiving Comments` = Archiving_Comments
   ) %>%
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
