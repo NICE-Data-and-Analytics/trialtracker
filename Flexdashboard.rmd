@@ -498,16 +498,8 @@ observeEvent(input$button_add, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trial - please wait while the dashboard refreshes in background....")
 
   dbExecute(con, exp_add())
-
-  if (input$registry_add == 'NCT_Ids') {
-    source('Download_Trial_Info_NCT.R')
-  } else if (input$registry_add == 'ISRCTN_Ids') {
-    source('Download_Trial_Info_ISRCTN.R')
-  } else if (input$registry_add == 'NIHR_Ids') {
-     source('Download_Trial_Info_NIHR.R')
-  } else if (input$registry_add == 'EU_Ids') {
-     source('Download_Trial_Info_EU.R')
-  }
+  
+  source('Download_Trial_Info_no_PM_or_email.R')
 
   shinybusy::remove_modal_spinner()
 
