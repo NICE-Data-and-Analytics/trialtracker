@@ -13,7 +13,6 @@ runtime: shiny
 #Front end
 # 1) Add error handling controls for on adding IDS (pattern match) 
 # 2) Add in tickbox for impact / no impact
-# 3) Add in field for condition (short.working title) to the add trial page (or nix?)
 
 #Backend
 # 1) PURGE dot/space from Guideline number field - rename ID fields in registry_fields equal to names in Trial_Ids
@@ -783,7 +782,7 @@ inputPanel(
     selectInput('ID_comment',
                 label = 'Select Trial ID reference number',
                 choices = ""),
-    textInput("trial_comments", label = "Comments", placeholder = "Trial Comments"),
+    textAreaInput("trial_comments", label = "Comments", placeholder = "Trial Comments", resize = "both"),
     actionButton("button_comment", "Amend Comments")
   )
 
@@ -828,7 +827,7 @@ output$fetch_comment_SQL <- renderText(pulled_comments())
 
 observeEvent(input$ID_comment, {
   
-  updateTextInput(session, "trial_comments", value = pulled_comments())
+  updateTextAreaInput(session, "trial_comments", value = pulled_comments())
   
 })
 

@@ -159,7 +159,8 @@ EU_DF <-
   select(Query_Date, Guideline.number, URL, everything(),
          -NCT_Ids, -ISRCTN_Ids, -NIHR_Ids,
          -Short..working.title.) %>% 
-  rename('X_id' = `_id`)
+  rename('X_id' = `_id`) %>% 
+  unique()
 
 # Add to db if no record already today
 update_db(con, "EU", EU_DF)
