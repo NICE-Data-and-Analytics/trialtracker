@@ -33,8 +33,6 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 
-#setwd('//srv/shiny-server/trialtracker')
-
 con <- dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite")
 
 Ids <- dbReadTable(con, "Trial_Ids")

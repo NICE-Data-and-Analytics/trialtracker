@@ -5,7 +5,7 @@ library(tidyverse)
 library(readxl)
 library(DBI)
 
-setwd('//srv/shiny-server/trialtracker')
+setwd('//srv/shiny-server/trialtracker-dev')
 
 #Set Regex patterns
 NCT_pattern <- "NCT[0-9]{8}"
@@ -53,3 +53,6 @@ write_csv(Event_Tracker, "Data_Files/Events_Tracked.csv")
 con <- dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite")
 RSQLite::dbWriteTable(con, "Trial_Ids",  Event_Tracker, overwrite = TRUE)
 dbDisconnect(con)
+
+#clear env
+rm(list = ls())
