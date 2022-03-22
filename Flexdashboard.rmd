@@ -180,9 +180,10 @@ old_df <- dbReadTable(con, "NCT") %>%
 compare_df(new_df,
            old_df,
            group_col = c("Guideline.number", "NCTId"),
-           exclude = "Query_Date",
+           exclude = c("Query_Date", "Comments"),
            stop_on_error = FALSE
            )$comparison_df %>%
+  left_join(new_df) %>% 
   mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
          URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
          Title = str_trunc(BriefTitle, 80),
@@ -205,6 +206,7 @@ compare_df(new_df,
     `Completion Date` = CompletionDate,
     `Results Submit Date` = ResultsFirstSubmitDate,
     `Last Update Date` = LastUpdatePostDate,
+    Comments
   ) %>% 
 datatable(
   options = list(bPaginate = FALSE, scrollY = TRUE),
@@ -229,8 +231,9 @@ old_df <- dbReadTable(con, "ISRCTN") %>%
 compare_df(new_df,
            old_df,
            group_col = c("Guideline.number", "ISRCTN_No"),
-           exclude = "Query_Date",
+           exclude = c("Query_Date", "Comments"),
            stop_on_error = FALSE)$comparison_df %>%
+  left_join(new_df) %>% 
   mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
          Title = str_trunc(Scientific_Title,75)) %>% 
   mutate(across(.fns = clean_UTF),
@@ -271,9 +274,10 @@ compare_df(
   new_df,
   old_df,
   group_col = c("Guideline.number", "project_id"),
-  exclude = "Query_Date",
+  exclude = c("Query_Date", "Comments"),
   stop_on_error = FALSE
 )$comparison_df %>%
+  left_join(new_df) %>% 
   mutate(#`Query Date` = as.Date(Query_Date, origin = '1970-01-01'),
          Title = str_trunc(project_title, 90)) %>% 
   mutate(across(.fns = clean_UTF)) %>% 
@@ -310,9 +314,10 @@ compare_df(
   new_df,
   old_df,
   group_col = c("Guideline.number", "EU_Ids"),
-  exclude = "Query_Date",
+  exclude = c("Query_Date", "Comments"),
   stop_on_error = FALSE
 )$comparison_df %>%
+  left_join(new_df) %>% 
   mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
          Title = str_trunc(a3_full_title_of_the_trial, 90)) %>% 
   mutate(across(.fns = clean_UTF)) %>% 
