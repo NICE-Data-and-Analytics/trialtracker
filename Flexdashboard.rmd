@@ -593,11 +593,8 @@ observeEvent(input$button_add_multi, {
 
   DBI::dbAppendTable(con, "Trial_Ids", to_add())
 
-  # withProgress(message = "Adding Trials", {
-    source('Download_Trial_Info - no PM call.R')
-  #   incProgress(amount = 1)
-  # })
-
+  source('Download_Trial_Info_no_PM_or_email.R')
+  
   shinybusy::remove_modal_spinner()
 
   output$multi_success2 <- renderText("Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab")
@@ -709,15 +706,7 @@ observeEvent(input$button_delete, {
 
   dbExecute(con, exp_delete())
 
-  if (input$registry_remove == 'NCT_Ids') {
-    source('Download_Trial_Info_NCT.R')
-  } else if (input$registry_remove == 'ISRCTN_Ids') {
-    source('Download_Trial_Info_ISRCTN.R')
-  } else if (input$registry_remove == 'NIHR_Ids') {
-    source('Download_Trial_Info_NIHR.R')
-  } else if (input$registry_remove == 'EU_Ids') {
-    source('Download_Trial_Info_EU.R')
-  }
+  source('Download_Trial_Info_no_PM_or_email.R')
 
   shinybusy::remove_modal_spinner()
 
@@ -730,7 +719,7 @@ observeEvent(input$button_archive, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Archiving Trial - please wait while the dashboard refreshes in background....")
 
   pulled_trial_data <- dbGetQuery(con, exp_archive_pull()) %>%
-    mutate("Archiving_Comments" = paste(Comments, as.character(input$comments_archive)), collapse = " ") %>%
+    mutate("Archiving_Comments" = paste(Comments, as.character(input$comments_archive), collapse = " ")) %>%
     slice_max(Query_Date)
 
   #write to db (append)
@@ -738,16 +727,8 @@ observeEvent(input$button_archive, {
 
   dbExecute(con, exp_delete())
 
-  if (input$registry_remove == 'NCT_Ids') {
-    source('Download_Trial_Info_NCT.R')
-  } else if (input$registry_remove == 'ISRCTN_Ids') {
-    source('Download_Trial_Info_ISRCTN.R')
-  } else if (input$registry_remove == 'NIHR_Ids') {
-    source('Download_Trial_Info_NIHR.R')
-  } else if (input$registry_remove == 'EU_Ids') {
-    source('Download_Trial_Info_EU.R')
-  }
-
+  source('Download_Trial_Info_no_PM_or_email.R')
+  
   shinybusy::remove_modal_spinner()
 
   #return some success message
