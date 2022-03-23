@@ -719,8 +719,8 @@ observeEvent(input$button_archive, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Archiving Trial - please wait while the dashboard refreshes in background....")
 
   pulled_trial_data <- dbGetQuery(con, exp_archive_pull()) %>%
-    mutate("Archiving_Comments" = paste(Comments, as.character(input$comments_archive), collapse = " ")) %>%
-    slice_max(Query_Date)
+    slice_max(Query_Date) %>% 
+    mutate("Archiving_Comments" = str_remove(paste(Comments, as.character(input$comments_archive), collapse = " "), "NA"))
 
   #write to db (append)
   dbWriteTable(con, paste0(str_sub(input$registry_remove, end=-5), "_rxv"), pulled_trial_data, append = TRUE)
