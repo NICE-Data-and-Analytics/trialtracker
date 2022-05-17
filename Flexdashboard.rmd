@@ -607,19 +607,20 @@ observeEvent(input$button_add_multi, {
 
 })
 
-# mainPanel(textOutput('baddabing'),
-#           tableOutput('tab'),
-#           textOutput('NCT_check'),
-#           textOutput('valids'))
+#Debug panels
+ # mainPanel(textOutput('baddabing'), 
+ #           tableOutput('tab'),
+ #           textOutput('NCT_check'),
+ #           textOutput('valids'))
 
 mainPanel(
-  #textOutput('errors'),
-  #textOutput('errors_length'),
-  #textOutput('multi_errors'),
-  #textOutput('multi_errors_length'),
+  #textOutput('errors'), #
+  #textOutput('errors_length'), #
+  #textOutput('multi_errors'), #
+  #textOutput('multi_errors_length'),#
   textOutput('multi_error'),
   textOutput('multi_fail'),
-  #textOutput('multi_success1'),
+  #textOutput('multi_success1'),# 
   textOutput('multi_success2'))
 
 ```
@@ -630,7 +631,7 @@ Select relevant registry and trial ID reference number below, along with any com
 
 'Archiving' moves the trial information from the live lists to the relevant archived trials list, where it will no longer be updated. 'Deleting' will remove the trial from the live lists and information will not be stored
 
-``` {r Remove tab}
+``` {r Removetab}
 
 inputPanel(
     radioButtons(
