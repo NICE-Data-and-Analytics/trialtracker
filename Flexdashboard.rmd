@@ -53,7 +53,7 @@ Row {.tabset .tabset-fade}
 
 ### ClinicalTrials.gov
 
-```{r CTG table}
+```{r CTGtable}
 
 dbReadTable(con, "NCT") %>%
   filter(NCTId %in% Ids$NCT_Ids) %>% 
@@ -84,7 +84,7 @@ dbReadTable(con, "NCT") %>%
 
 ### ISRCTN
 
-```{r ISRCTN table}
+```{r ISRCTNtable}
 
 dbReadTable(con, "ISRCTN") %>%
   filter(ISRCTN_No %in% Ids$ISRCTN_Ids) %>% 
@@ -111,7 +111,7 @@ dbReadTable(con, "ISRCTN") %>%
 
 ### NIHR
 
-``` {r NIHR table}
+``` {r NIHRtable}
 
 dbReadTable(con, "NIHR") %>%
   filter(project_id %in% Ids$NIHR_Ids) %>% 
@@ -130,7 +130,7 @@ dbReadTable(con, "NIHR") %>%
 
 ### Clinicaltrials.eu
 
-``` {r EU table}
+``` {r EUtable}
 
 dbReadTable(con, "EU") %>%
   mutate("short_id" = str_sub(`X_id`, 1, 14)) %>% 
@@ -166,7 +166,9 @@ Row {.tabset .tabset-fade}
 
 ### ClinicalTrials.gov
 
-``` {r CGT monthly change}
+``` {r CGTmonthlychange}
+
+
 
 new_df <- dbReadTable(con, "NCT") %>%
   filter(NCTId %in% Ids$NCT_Ids) %>% 
@@ -175,15 +177,34 @@ new_df <- dbReadTable(con, "NCT") %>%
 old_df <- dbReadTable(con, "NCT") %>%
   filter(Query_Date <= Sys.Date() - 31,
 	NCTId %in% Ids$NCT_Ids) %>% 
-  slice_max(Query_Date, n=1, with_ties = TRUE)
+  slice_max(Query_Date, n = 1, with_ties = TRUE)
 
 compare_df(new_df,
            old_df,
            group_col = c("Guideline.number", "NCTId"),
-           exclude = c("Query_Date", "Comments"),
+           exclude = c("Query_Date"
+                       , "Comments"
+                       , "Condition"
+                       , "BriefTitle"
+                       , "Acronym"
+                       , "PrimaryCompletionDate"
+                       , "ResultsFirstSubmitDate"
+                       ),
            stop_on_error = FALSE
            )$comparison_df %>%
-  left_join(new_df) %>% 
+  left_join(
+      (new_df %>%
+        select(BriefTitle,
+               Guideline.number,
+               URL,
+               NCTId,
+               Condition,
+               ResultsFirstSubmitDate,
+               Acronym,
+               Comments
+               )),
+    by = c("Guideline.number", "URL", "NCTId")
+    ) %>% 
   mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
          URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
          Title = str_trunc(BriefTitle, 80),
@@ -217,7 +238,7 @@ datatable(
 
 ### ISRCTN
 
-``` {r ISRCTN monthly change}
+``` {r ISRCTNmonthlychange}
 
 new_df <- dbReadTable(con, "ISRCTN") %>%
   filter(ISRCTN_No %in% Ids$ISRCTN_Ids) %>% 
@@ -259,7 +280,7 @@ compare_df(new_df,
 
 ### NIHR
 
-``` {r NIHR monthly change}
+``` {r NIHRmonthlychange}
 
 new_df <- dbReadTable(con, "NIHR") %>%
   filter(project_id %in% Ids$NIHR_Ids) %>% 
@@ -298,7 +319,7 @@ compare_df(
 
 ### Clinicaltrials.eu
 
-``` {r Clinicaltrials.eu monthly change}
+``` {r Clinicaltrials.eumonthlychange}
 
 new_df <- dbReadTable(con, "EU") %>%
   filter(EU_Ids %in% Ids$EU_Ids) %>% 
@@ -344,7 +365,7 @@ Row {.tabset .tabset-fade}
 
 ### ClinicalTrials.gov
 
-``` {r CTG pubs table}
+``` {r CTGpubstable}
 
 dbReadTable(con, "NCT_PM") %>%
   mutate(across(.fns = clean_UTF)) %>% 
@@ -367,7 +388,7 @@ dbReadTable(con, "NCT_PM") %>%
 
 ### ISRCTN
 
-``` {r ISRCTN pubs table}
+``` {r ISRCTNpubstable}
 
 dbReadTable(con, "ISRCTN_PM") %>%
   mutate(across(.fns = clean_UTF)) %>% 
@@ -390,7 +411,7 @@ dbReadTable(con, "ISRCTN_PM") %>%
 
 ### NIHR
 
-``` {r NIHR pubs table}
+``` {r NIHRpubstable}
 
 dbReadTable(con, "NIHR_PM") %>%
   mutate(across(.fns = clean_UTF)) %>% 
@@ -413,7 +434,7 @@ dbReadTable(con, "NIHR_PM") %>%
 
 ### Clinicaltrials.eu
 
-``` {r EU pubs table}
+``` {r EUpubstable}
 
 if ("EU_PM" %in% dbListTables(con)) {
   dbReadTable(con, "EU_PM") %>%
@@ -607,20 +628,19 @@ observeEvent(input$button_add_multi, {
 
 })
 
-#Debug panels
- # mainPanel(textOutput('baddabing'), 
- #           tableOutput('tab'),
- #           textOutput('NCT_check'),
- #           textOutput('valids'))
+# mainPanel(textOutput('baddabing'),
+#           tableOutput('tab'),
+#           textOutput('NCT_check'),
+#           textOutput('valids'))
 
 mainPanel(
-  #textOutput('errors'), #
-  #textOutput('errors_length'), #
-  #textOutput('multi_errors'), #
-  #textOutput('multi_errors_length'),#
+  #textOutput('errors'),
+  #textOutput('errors_length'),
+  #textOutput('multi_errors'),
+  #textOutput('multi_errors_length'),
   textOutput('multi_error'),
   textOutput('multi_fail'),
-  #textOutput('multi_success1'),# 
+  #textOutput('multi_success1'),
   textOutput('multi_success2'))
 
 ```
@@ -857,7 +877,7 @@ Row {.tabset .tabset-fade}
 
 ### ClinicalTrials.gov Archive
 
-``` {r CG.gov archive}
+``` {r CG.govarchive}
 
 dbReadTable(con, "NCT_rxv") %>%
   mutate(across(.fns = clean_UTF),
@@ -887,7 +907,7 @@ dbReadTable(con, "NCT_rxv") %>%
 
 ### ISRCTN Archive
 
-```{r ISRCTN archive table}
+```{r ISRCTNarchivetable}
 
 dbReadTable(con, "ISRCTN_rxv") %>%
   mutate(across(.fns = clean_UTF),
@@ -914,7 +934,7 @@ dbReadTable(con, "ISRCTN_rxv") %>%
 
 ### NIHR Archive
 
-``` {r NIHR archive table}
+``` {r NIHRarchivetable}
 
 dbReadTable(con, "NIHR_rxv") %>%
   mutate(across(.fns = clean_UTF),
@@ -936,7 +956,7 @@ dbReadTable(con, "NIHR_rxv") %>%
 
 ### EU Archive
 
-``` {r EU archive table}
+``` {r EUarchivetable}
 
 dbReadTable(con, "EU_rxv") %>%
   select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids
