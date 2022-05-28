@@ -1,6 +1,9 @@
 # Downloads data for trials (schedule to daily)
 # Save to SQLite db
 
+#options echo true
+options(echo = TRUE)
+
 #setwd - ugly hack probably need rstudio server on here
 setwd('//srv/shiny-server/trialtracker')
 

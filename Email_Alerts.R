@@ -1,5 +1,8 @@
 # Email Alerts for changes and pubmed info
 
+#options echo true
+options(echo = TRUE)
+
 # Library
 library(tidyverse)
 library(DBI)
