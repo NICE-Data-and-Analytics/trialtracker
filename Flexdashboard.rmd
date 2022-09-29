@@ -379,6 +379,148 @@ compare_df(
 
 ```
 
+
+No Changes in Last 6m
+======================================================
+
+**Last refreshed: `r file.info("RSQLite_Data/TrialTracker-db.sqlite")$mtime`**
+
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
+
+### ClinicalTrials.gov
+
+``` {r nochangeCTG}
+
+current <- dbReadTable(con, "NCT") %>%
+  filter(Query_Date == as_date(max(Query_Date)))
+         
+old <- dbReadTable(con, "NCT") %>%
+  filter(Query_Date == (as_date(max(Query_Date))-months(6)))
+
+inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE) %>% 
+  select(-contains(".x")) %>% 
+  select(-contains(".y")) %>%
+  left_join(NCT_dates) %>% 
+  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  mutate(across(.fns = clean_UTF),
+         PrimaryCompletionDate = mdy(PrimaryCompletionDate),
+         CompletionDate = mdy(CompletionDate),
+         ResultsFirstSubmitDate = mdy(ResultsFirstSubmitDate),
+         LastUpdatePostDate = mdy(LastUpdatePostDate)
+         )%>% 
+  rename(
+    "Program or Guideline" = Guideline.number,
+    `NCT ID` = NCTId,
+    `Org ID` = OrgStudyId,
+    Title = BriefTitle,
+    Status = OverallStatus,
+    `Primary Completion Date` = PrimaryCompletionDate,
+    `Completion Date` = CompletionDate,
+    `Results Submit Date` = ResultsFirstSubmitDate,
+    `Results Post Date` = ResultsFirstPostDate,
+    `Last Update` = LastUpdatePostDate,
+  ) %>%
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE),
+            filter = "top"
+            )
+
+```
+
+### ISRCTN
+
+``` {r nochangeISRCTN}
+
+current <- dbReadTable(con, "ISRCTN") %>%
+  filter(Query_Date == as_date(max(Query_Date)))
+         
+old <- dbReadTable(con, "ISRCTN") %>%
+  filter(Query_Date == (as_date(max(Query_Date))-months(6)))
+
+inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE) %>% 
+  select(-contains(".x")) %>% 
+  select(-contains(".y")) %>%
+  left_join(ISRCTN_dates) %>% 
+  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  mutate(across(.fns = clean_UTF),
+         Results_date_completed = dmy(Results_date_completed),
+         Results_date_posted = dmy(Results_date_posted),
+         Results_date_first_publication = dmy(Results_date_first_publication)) %>% 
+  rename(
+    "Program or Guideline" = Guideline.number,
+    `ISRCTN ID` = ISRCTN_No,
+    Title = Public_Title,
+    `Scientific Title` = Scientific_Title,
+    `Recruitment Status` = Recruitment_Status,
+    `Results completed date` = Results_date_completed,
+    `Results URL` = Results_url_link,
+    `Results summary` = Results_summary,
+    `Results posted date` = Results_date_posted,
+    `Results published date` = Results_date_first_publication
+  ) %>%
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
+```
+
+### NIHR
+
+``` {r nochangeNIHR}
+
+current <- dbReadTable(con, "NIHR") %>%
+  filter(Query_Date == as_date(max(Query_Date)))
+         
+old <- dbReadTable(con, "NIHR") %>%
+  filter(Query_Date == (as_date(max(Query_Date))-months(6)))
+
+inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE) %>% 
+  select(-contains(".x")) %>% 
+  select(-contains(".y")) %>%
+  left_join(NIHR_dates) %>% 
+  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  mutate(across(.fns = clean_UTF)) %>% 
+  rename(
+    "Program or Guideline" = Guideline.number,
+    `NIHR ID` = project_id,
+    `Project Title` = project_title,
+    Status = project_status,
+    `End Date` = end_date
+  ) %>%
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
+```
+
+### Clinicaltrials.eu
+
+```{r nochangeEU}
+
+current <- dbReadTable(con, "EU") %>%
+  filter(Query_Date == as_date(max(Query_Date)))
+         
+old <- dbReadTable(con, "EU") %>%
+  filter(Query_Date == (as_date(max(Query_Date))-months(6)))
+
+inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE) %>% 
+  select(-contains(".x")) %>% 
+  select(-contains(".y")) %>%
+  left_join(EU_dates) %>% 
+  select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids
+  ) %>%
+  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  mutate(across(.fns = clean_UTF)) %>% 
+  distinct() %>% 
+  rename(
+    "Program or Guideline" = Guideline.number,
+    `Clinicaltrials.eu ID` = `X_id`,
+    `End of Trial Status` = p_end_of_trial_status,
+    Title = a3_full_title_of_the_trial,
+    `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
+    `Sponsor ID` = a41_sponsors_protocol_code_number
+  ) %>%
+  datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+  
+```
+
+
 Pubmed Publications
 ======================================================
 

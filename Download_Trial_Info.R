@@ -359,4 +359,4 @@ dbDisconnect(con)
 
 ### EMAIL SECTION
 
-source('Email_Alerts.R')
+source('Email_Alerts.R', echo = TRUE)
