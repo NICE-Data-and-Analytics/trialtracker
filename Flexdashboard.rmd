@@ -75,7 +75,7 @@ dbReadTable(con, "NCT") %>%
   rename(
     "Program or Guideline" = Guideline.number,
     `NCT ID` = NCTId,
-    `Org ID` = OrgStudyId,
+    `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
     Status = OverallStatus,
     `Primary Completion Date` = PrimaryCompletionDate,
@@ -413,7 +413,7 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   rename(
     "Program or Guideline" = Guideline.number,
     `NCT ID` = NCTId,
-    `Org ID` = OrgStudyId,
+    `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
     Status = OverallStatus,
     `Primary Completion Date` = PrimaryCompletionDate,
@@ -1061,7 +1061,7 @@ dbReadTable(con, "NCT_rxv") %>%
   rename(
     "Program or Guideline" = Guideline.number,
     `NCT ID` = NCTId,
-    `Org ID` = OrgStudyId,
+    `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
     Status = OverallStatus,
     `Primary Completion Date` = PrimaryCompletionDate,
