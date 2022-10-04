@@ -403,6 +403,7 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   select(-contains(".y")) %>%
   left_join(NCT_dates) %>% 
   select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(-SeeAlsoLinkURL) %>% 
   mutate(across(.fns = clean_UTF),
          PrimaryCompletionDate = mdy(PrimaryCompletionDate),
          CompletionDate = mdy(CompletionDate),
