@@ -316,7 +316,7 @@ COVID_email <- envelope() %>%
           "Note that this email inbox is not monitored - please email robert.willans@nice.org.uk with any queries",
           sep = " - ")
   ) %>%
-  subject(subject = "Trial Tracking Changes")
+  subject(subject = "Trial Tracking Changes - COVID")
 
 if (length(COVID_files) > 0) {
   for (i in 1:length(COVID_files)) {
