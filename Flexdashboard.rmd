@@ -550,6 +550,7 @@ dbReadTable(con, "NCT_PM") %>%
     Journal =  jabbrv,
     Condition = Short..working.title.
   ) %>%
+  arrange(desc(`Query Date`)) %>% 
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 

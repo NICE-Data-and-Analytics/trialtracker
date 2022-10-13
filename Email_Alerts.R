@@ -266,11 +266,6 @@ if ("EU_PM" %in% dbListTables(con)) {
   EU_PM_IP <- gen_pubmed_df(con, "EU_PM", get_last_registry_entry_before_today("EU_PM") + 1, Sys.Date(), regex_pattern = prog_regexes[2])
   EU_PM_Surv_Oth <- gen_pubmed_df(con, "EU_PM", get_last_registry_entry_before_today("EU_PM") + 1, Sys.Date(), regex_pattern = prog_regexes[3])
 }
-
-change_dfs <- ls() %>% str_subset("_Changes")
-
-map(change_dfs, write_changes_to_disk)
-
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 #create attachments
 write_changes_to_disk(NCT_Changes_COVID, "NCT_COVID")
 write_changes_to_disk(NCT_Changes_IP, "NCT_IP")
@@ -312,7 +307,8 @@ OTH_files <- dir(daily_path, full.names = TRUE) %>% str_subset("_OTH_")
 COVID_email <- envelope() %>%
   from("robert.willans@nice.org.uk") %>%
   to("niamh.knapton@nice.org.uk") %>%
-  cc("catherine.jacob@nice.org.uk",
+  cc(
+  "catherine.jacob@nice.org.uk",
 	"robert.willans@nice.org.uk") %>%
   text(
     paste("Trial Tracking Changes - COVID",
@@ -341,7 +337,7 @@ if (length(COVID_email$parts) > 1) {
   COVID_email <- envelope() %>% 
     from("robert.willans@nice.org.uk") %>% 
     to("robert.willans@nice.org.uk") %>% 
-    subject("TrialTracker ran today - COIVD") %>% 
+    subject("TrialTracker ran today - COVID") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
   
   smtp <- server(host = "smtp.mandrillapp.com",
@@ -356,7 +352,8 @@ if (length(COVID_email$parts) > 1) {
 IP_email <- envelope() %>%
   from("robert.willans@nice.org.uk") %>%
   to("niamh.knapton@nice.org.uk") %>%
-  cc("catherine.jacob@nice.org.uk",
+  cc(
+    "catherine.jacob@nice.org.uk",
      "robert.willans@nice.org.uk") %>%
   text(
     paste("Trial Tracking Changes - IP",
@@ -364,7 +361,7 @@ IP_email <- envelope() %>%
           "Note that this email inbox is not monitored - please email robert.willans@nice.org.uk with any queries",
           sep = " - ")
   ) %>%
-  subject(subject = "Trial Tracking Changes")
+  subject(subject = "Trial Tracking Changes - IP")
 
 if (length(IP_files) > 0) {
   for (i in 1:length(IP_files)) {
@@ -400,15 +397,16 @@ if (length(IP_email$parts) > 1) {
 OTH_email <- envelope() %>%
   from("robert.willans@nice.org.uk") %>%
   to("niamh.knapton@nice.org.uk") %>%
-  cc("catherine.jacob@nice.org.uk",
-     "robert.willans@nice.org.uk") %>%
+  cc(
+    "catherine.jacob@nice.org.uk",
+    "robert.willans@nice.org.uk") %>%
   text(
     paste("Trial Tracking Changes - Other",
           Sys.Date(),
           "Note that this email inbox is not monitored - please email robert.willans@nice.org.uk with any queries",
           sep = " - ")
   ) %>%
-  subject(subject = "Trial Tracking Changes")
+  subject(subject = "Trial Tracking Changes - Other")
 
 if (length(OTH_files) > 0) {
   for (i in 1:length(OTH_files)) {
