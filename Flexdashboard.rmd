@@ -140,12 +140,14 @@ NIHR_dates <- dbReadTable(con, "NIHR") %>%
   summarise("Date Added" = as_date(min(Query_Date-1)))
 
 dbReadTable(con, "NIHR") %>%
-  filter(project_id %in% Ids$NIHR_Ids) %>% 
-  left_join(NIHR_dates) %>% 
+  mutate("project_id_filter" = str_replace_all(project_id, "[^\\d]", "")) %>% 
+  filter(project_id_filter %in% str_replace_all(Ids$NIHR_Ids, "[^\\d]", "")) %>% 
+  select(-project_id_filter) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date) %>%
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
-  mutate(across(.fns = clean_UTF)) %>% 
+  left_join(NIHR_dates) %>%
+  select(Guideline.number, `Date Added`, everything()) %>% # reorder
+  mutate(across(.fns = clean_UTF)) %>%
   rename(
     "Program or Guideline" = Guideline.number,
     `NIHR ID` = project_id,
@@ -313,13 +315,17 @@ compare_df(new_df,
 
 ``` {r NIHRmonthlychange}
 
-new_df <- dbReadTable(con, "NIHR") %>%
-  filter(project_id %in% Ids$NIHR_Ids) %>% 
+new_df <- dbReadTable(con, "NIHR") %>% 
+  mutate("project_id_filter" = str_replace_all(project_id, "[^\\d]", "")) %>% 
+  filter(project_id_filter %in% str_replace_all(Ids$NIHR_Ids, "[^\\d]", "")) %>% 
+  select(-project_id_filter) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE)
 
 old_df <- dbReadTable(con, "NIHR") %>%
-  filter(Query_Date <= Sys.Date() - 31,
-	 project_id %in% Ids$NIHR_Ids) %>% 
+  mutate("project_id_filter" = str_replace_all(project_id, "[^\\d]", "")) %>% 
+  filter(project_id_filter %in% str_replace_all(Ids$NIHR_Ids, "[^\\d]", "")) %>% 
+  select(-project_id_filter) %>% 
+  filter(Query_Date <= Sys.Date() - 31) %>% 
   slice_max(Query_Date, n=1, with_ties = TRUE)
 
 compare_df(

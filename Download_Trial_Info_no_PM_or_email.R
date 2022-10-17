@@ -5,7 +5,7 @@
 options(echo = TRUE)
 
 #setwd - ugly hack probably need rstudio server on here
-setwd('//srv/shiny-server/trialtracker')
+#setwd('//srv/shiny-server/trialtracker')
 
 # libraries
 library(tidyverse)
@@ -34,25 +34,25 @@ concat_ids <- function(df, id_col) {
     drop_na()
   
   if (nrow(df) > 0) {
-      
+    
     return(
       df %>%
         filter(if_any(.cols = everything(), .fns = ~(. !=""))) %>% 
         unique() %>%
         as_vector() %>%
         unname()
-  )
+    )
   }
   
   else
-  
+    
     return(
       df %>% 
         unique() %>%
         as_vector() %>%
         unname()
-           )  
-    
+    )  
+  
 }
 collapse_ids <- function(df, id_col, paste_collapse) {
   concat_ids(df, id_col) %>%
@@ -207,19 +207,15 @@ ISRCTN_URL2 <- paste0(
   length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
 )
 
-NIHR_URL <- paste0(
-  "https://nihr.opendatasoft.com/api/records/1.0/search/?dataset=infonihr-open-dataset&q=",
-  NIHR_Id_Vector,
-  "&rows=",
-  length(concat_ids(Trial_IDs, "NIHR_Ids")) + 50
-)
+NIHR_URL_API2 <-
+  "https://nihr.opendatasoft.com/api/v2/catalog/datasets/infonihr-open-dataset/exports/json?limit=-1&offset=0&lang=en&timezone=UTC"
 
 EU_URL <- paste0(
   "https://www.clinicaltrialsregister.eu/ctr-search/search?query=",
   EU_Vector
 )
 
-rm(EU_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2, NCT_Id_Vector, NIHR_Id_Vector)
+rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
 
 # Results DFs
 
@@ -266,17 +262,17 @@ ISRCTN_DF <- bind_rows(ISRCTN_DF1, ISRCTN_DF2) %>%
   select(Query_Date, Guideline.number, URL, everything())
 
 # NIHR
-NIHR_json <- fromJSON(url(NIHR_URL))
+NIHR_json <- fromJSON(url(NIHR_URL_API2))
 
 NIHR_Trial_IDs <- Trial_IDs %>%
   select(Guideline.number, URL, NIHR_Ids) %>%
-  filter(!is.na(NIHR_Ids)) %>%
-  mutate("NIHR_Ids" = str_replace_all(NIHR_Ids, "[^\\d]", ""))
+  drop_na(NIHR_Ids) %>%
+  mutate("projectjoin" = str_replace_all(NIHR_Ids, "[^\\d]", ""))
 
-NIHR_DF <- NIHR_json$records$fields %>%
+NIHR_DF <- NIHR_json %>%
   mutate("projectjoin" = str_replace_all(project_id, "[^\\d]", "")) %>%
-  right_join(NIHR_Trial_IDs, by = c("projectjoin" = "NIHR_Ids")) %>%
-  filter(!is.na(projectjoin)) %>%
+  right_join(NIHR_Trial_IDs, by = c("projectjoin")) %>%
+  drop_na(projectjoin) %>%
   mutate(Query_Date = Sys.Date()) %>%
   select(Query_Date, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date)
 
