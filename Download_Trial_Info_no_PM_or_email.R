@@ -5,7 +5,7 @@
 options(echo = TRUE)
 
 #setwd - ugly hack probably need rstudio server on here
-#setwd('//srv/shiny-server/trialtracker')
+setwd('//srv/shiny-server/trialtracker')
 
 # libraries
 library(tidyverse)
