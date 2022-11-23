@@ -11,8 +11,7 @@ runtime: shiny
 # TODO
 
 #Front end
-# 1) Add error handling controls for on adding IDS (pattern match) 
-# 2) Add in tickbox for impact / no impact
+# 1) Add more error handling controls for on adding IDS (pattern match), especially NIHR
 
 #Backend
 # 1) PURGE dot/space from Guideline number field - rename ID fields in registry_fields equal to names in Trial_Ids
@@ -661,8 +660,6 @@ Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating coun
 
 ``` {r AddSingleTrial}
 
-## ADD in condition (short.working.title) as additional field
-
 inputPanel("Add Single Trial",
   radioButtons(
     "registry_add",
@@ -741,21 +738,11 @@ to_add <- reactive({
 #error check
 observeEvent(input$uploadtemplate, {
 
-  # output$baddabing <- renderText("Badda-Bing")
-  # output$tab <- renderTable({to_add()})
-
   NCT_check <- str_detect(replace_na(to_add()$NCT_Ids, ''), NCT_pattern)
   EU_check <- str_detect(replace_na(to_add()$EU_Ids, ''), EU_pattern)
   ISRCTN_check <- str_detect(replace_na(to_add()$ISRCTN_Ids, ''), ISRCTN_pattern)
   NIHR_check <- str_detect(replace_na(to_add()$NIHR_Ids, ''), NIHR_pattern)
-
-  # output$NCT_check <- renderText({as.character(NCT_check)})
-  #output$NIHR_check <- renderText({as.character(NCT_check)})
-
   Valid_ID <- {NCT_check|EU_check|ISRCTN_check|NIHR_check}
-
-  # output$valids <- renderText({as.character(Valid_ID)})
-
   errors <- which(Valid_ID == FALSE)
 
   output$errors <- renderText({paste0("errors = ", as.character(errors))})
@@ -776,22 +763,13 @@ observeEvent(input$button_add_multi, {
   EU_check <- str_detect(replace_na(to_add()$EU_Ids, ''), EU_pattern)
   ISRCTN_check <- str_detect(replace_na(to_add()$ISRCTN_Ids, ''), ISRCTN_pattern)
   NIHR_check <- str_detect(replace_na(to_add()$NIHR_Ids, ''), NIHR_pattern)
-
-  #output$NCT_check <- renderText({as.character(NCT_check)})
-  #output$NIHR_check <- renderText({as.character(NCT_check)})
-
   Valid_ID <- {NCT_check|EU_check|ISRCTN_check|NIHR_check}
-
-  #output$valids <- renderText({as.character(Valid_ID)})
-
   multi_errors <- which(Valid_ID == FALSE)
 
   output$multi_errors <- renderText({paste0("multi_errors = ", as.character(multi_errors))})
   output$multi_errors_length <- renderText({paste0("multi_errors_length = ", as.character(length(multi_errors)))})
 
   if (length(multi_errors)==0){
-
-  #output$multi_success1 <- renderText("Adding Trials - please wait while the dashboard refreshes in background....")
 
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trials - please wait while the dashboard refreshes in background....")
 
@@ -801,7 +779,7 @@ observeEvent(input$button_add_multi, {
   
   shinybusy::remove_modal_spinner()
 
-  output$multi_success2 <- renderText("Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab")
+  output$multi_success <- renderText("Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab")
 
   } else if (length(multi_errors)>0){
 
@@ -811,12 +789,6 @@ observeEvent(input$button_add_multi, {
 
 })
 
-## DEBUG ERRORS COMMENTED OUT
-
-# mainPanel(textOutput('baddabing'),
-#           tableOutput('tab'),
-#           textOutput('NCT_check'),
-#           textOutput('valids'))
 
 mainPanel(
   #textOutput('errors'),
@@ -826,8 +798,7 @@ mainPanel(
   #textOutput('multi_errors_length'),
   textOutput('multi_error'),
   textOutput('multi_fail'),
-  #textOutput('multi_success1'),
-  textOutput('multi_success2'))
+  textOutput('multi_success'))
 
 ```
 
@@ -970,8 +941,6 @@ inputPanel(
   )
 
 mainPanel(
-  #textOutput("comment_sql"),
-  #textOutput("fetch_comment_SQL"),
   textOutput("success_comment")
   )
 

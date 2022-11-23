@@ -4,7 +4,7 @@
 #options echo true
 options(echo = TRUE)
 
-#setwd - ugly hack probably need rstudio server on here
+#setwd - ugly hack to set filepath - comment out if run locally (setup 'here' at some point)
 setwd('//srv/shiny-server/trialtracker')
 
 # libraries
@@ -21,7 +21,7 @@ library(here)
 #print date for debug purposes
 Sys.Date()
 
-#set permissions for clinicaltrials.eu
+#set permissions for clinicaltrials.eu to work
 httr::set_config(httr::config(ssl_verifypeer = FALSE))
 
 ## FUNCTIONS
@@ -162,7 +162,6 @@ half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids"))/2,0)
 
 # Collapse NCT numbers into search term
 NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%20OR%20")
-#ISRCTN_Id_Vector <- collapse_ids(Trial_IDs, "ISRCTN_Ids", "%20OR%20")
 ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] %>% paste0(collapse = "%20OR%20")
 ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] %>% paste0(collapse = "%20OR%20")
 NIHR_Id_Vector <- collapse_ids(Trial_IDs, "NIHR_Ids", "+OR+")
@@ -186,12 +185,7 @@ NCT_URL <- paste0(
   "&fmt=csv"
 )
 
-# ISRCTN_URL <- paste0(
-#   "http://www.isrctn.com/api/query/format/who?q=",
-#   ISRCTN_Id_Vector,
-#   "&limit=",
-#   length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
-# )
+# ISRCTN URL split into 2 as quite long
 
 ISRCTN_URL1 <- paste0(
   "http://www.isrctn.com/api/query/format/who?q=",
