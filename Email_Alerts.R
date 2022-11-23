@@ -24,7 +24,6 @@ get_last_registry_entry_before_today <- function(registry) {
     as.Date(origin = '1970-01-01') %>% 
     unlist()
 }
-
 pull_change <- function(registry_table, con, start_date, end_date, group_cols = NULL, exclude_cols = NULL, regex_pattern = ".") {
   
   if (length(start_date) == 0) {
@@ -45,7 +44,6 @@ pull_change <- function(registry_table, con, start_date, end_date, group_cols = 
   )
   
 }
-
 gen_pubmed_df <- function(con, registry_table, start_date, end_date, regex_pattern = ".") {
   
   dbReadTable(con = con, registry_table) %>% 
@@ -54,7 +52,6 @@ gen_pubmed_df <- function(con, registry_table, start_date, end_date, regex_patte
     mutate(Query_Date = as.Date(Query_Date, origin = "1970-01-01"))
   
 }
-
 write_changes_to_disk <- function(Change_DF, DF_Name, prog_name = "") {
   
   if (nrow(Change_DF$comparison_df) > 0 ) {
@@ -70,7 +67,6 @@ write_changes_to_disk <- function(Change_DF, DF_Name, prog_name = "") {
     )
   }
 }
-
 write_PM_dfs_to_disk <- function(PM_DF, PM_DF_Name, prog_name = "") {
   
   if (nrow(PM_DF) > 0 ) {
