@@ -14,8 +14,6 @@ library(jsonlite)
 library(xml2)
 library(DBI)
 library(ctrdata)
-library(easyPubMed)
-library(rentrez)
 library(here)
 
 #print date for debug purposes
@@ -26,7 +24,7 @@ httr::set_config(httr::config(ssl_verifypeer = FALSE))
 
 ## FUNCTIONS
 
-# collapse ID
+#Concatenation functions used for constructing API urls
 concat_ids <- function(df, id_col) {
   
   df <- df %>%
@@ -58,6 +56,18 @@ collapse_ids <- function(df, id_col, paste_collapse) {
   concat_ids(df, id_col) %>%
     paste0(collapse = paste_collapse)
 }
+
+#Create a list of ids to search
+create_search_list <- function(id_vector){
+  
+  tibble(ids = id_vector) %>%
+    filter(!is.na(ids)) %>%
+    distinct() %>%
+    as_vector() %>%
+    unname()
+}
+
+#Updates the db with info
 update_db <- function(con, registry, DF) {
   
   if (!is.null(DF)) {
@@ -80,78 +90,9 @@ update_db <- function(con, registry, DF) {
   }
   
 }
-results_count <- function(results_obj, index) {
-  results_obj[[index]]$count
-}
-get_xml_for_results <- function(results_object_item, count_list_item) {
-  if (count_list_item == 0) {
-    return(NULL)
-  }
-  else {
-    return(
-      articles_to_list(
-        entrez_fetch(db = 'pubmed', results_object_item$ids, rettype = 'xml')
-      ))
-  }
-}
-format_results_item <- function(results_item) {
-  map(results_item, article_to_df, getAuthor = FALSE, max_chars = -1) %>%
-    bind_rows()
-}
-get_dfs_from_results_obj <- function(results_obj_item, count_list_item) {
-  if (count_list_item == 0) {
-    return(NULL)
-  }
-  else {
-    return(
-      format_results_item(results_obj_item)
-    )
-  }
-}
-sleepy_entrez_search <- function(search_term, db = 'pubmed'){
-  Sys.sleep(0.3)
-  return(entrez_search(db = db, term = search_term))
-}
-create_search_list <- function(id_vector){
-  
-  tibble(ids = id_vector) %>% 
-    filter(!is.na(ids)) %>%
-    distinct() %>% 
-    mutate(ids = paste0(ids, " AND ",format(Sys.Date() - 1, "%Y/%m/%d"),"[edat]" )) %>% 
-    as_vector() %>% 
-    unname()
-}
-get_pubmed_arts <- function(ID_list) {
-  Results1 <- map(ID_list, sleepy_entrez_search, db = 'pubmed')
-  Counts <- map(seq_along(Results1), results_count, results_obj = Results1)
-  Results2 <- map2(Results1, Counts, get_xml_for_results)
-  Results3 <- map2(Results2, Counts, get_dfs_from_results_obj)
-  return(Results3)
-}
-format_arts_list <- function(arts_list) {
-  df1 <- arts_list %>%
-    bind_rows()
-  if ("pmid" %in% colnames(df1)) {
-    return(
-      df1 %>%
-        filter(!is.na(pmid)) %>%
-        rename("search" = ...15) %>%
-        mutate(
-          ID = str_extract(search, "([^\\s]+)"),
-          Query_Date = Sys.Date(),
-          doi = case_when((doi != "") ~ paste0('https://dx.doi.org/', doi),
-                          TRUE ~ "")
-        ) %>%
-        select(Query_Date, ID, doi, search, pmid:journal)
-    )
-  } else
-    return(NULL)
-}
-create_arts_DF <- function(search_query_list) {
-  get_pubmed_arts(search_query_list) %>% 
-    map2(search_query_list, bind_cols) %>% 
-    format_arts_list()
-}
+
+#source pubmed API functions
+source('PM_API_functions.R')
 
 # setup con to db
 con <- dbConnect(RSQLite::SQLite(), here("RSQLite_Data", "TrialTracker-db.sqlite"))
@@ -160,7 +101,7 @@ con <- dbConnect(RSQLite::SQLite(), here("RSQLite_Data", "TrialTracker-db.sqlite
 Trial_IDs <- dbReadTable(con, "Trial_IDs")
 half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids"))/2,0)
 
-# Collapse NCT numbers into search term
+# Collapse Trial ID numbers into search term
 NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%20OR%20")
 ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] %>% paste0(collapse = "%20OR%20")
 ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] %>% paste0(collapse = "%20OR%20")
@@ -185,7 +126,7 @@ NCT_URL <- paste0(
   "&fmt=csv"
 )
 
-# ISRCTN URL split into 2 as quite long
+#ISRCTN URL done in two parts as v large
 
 ISRCTN_URL1 <- paste0(
   "http://www.isrctn.com/api/query/format/who?q=",
@@ -307,4 +248,4 @@ update_db(con, "ISRCTN", ISRCTN_DF)
 update_db(con, "NIHR", NIHR_DF)
 update_db(con, "EU", EU_DF)
 
-rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL, EU_URL)
+rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)

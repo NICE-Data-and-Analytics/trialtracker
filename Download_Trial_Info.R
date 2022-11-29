@@ -5,7 +5,7 @@
 options(echo = TRUE)
 
 #setwd - ugly hack to set filepath - comment out if run locally (setup 'here' at some point)
-setwd('//srv/shiny-server/trialtracker')
+#setwd('//srv/shiny-server/trialtracker')
 
 # libraries
 library(tidyverse)
@@ -14,9 +14,8 @@ library(jsonlite)
 library(xml2)
 library(DBI)
 library(ctrdata)
-library(easyPubMed)
-library(rentrez)
 library(here)
+
 
 #print date for debug purposes
 Sys.Date()
@@ -26,7 +25,7 @@ httr::set_config(httr::config(ssl_verifypeer = FALSE))
 
 ## FUNCTIONS
 
-# collapse ID
+#Concatenation functions used for constructing API urls
 concat_ids <- function(df, id_col) {
   
   df <- df %>%
@@ -58,6 +57,18 @@ collapse_ids <- function(df, id_col, paste_collapse) {
   concat_ids(df, id_col) %>%
     paste0(collapse = paste_collapse)
 }
+
+#Create a list of ids to search
+create_search_list <- function(id_vector){
+  
+  tibble(ids = id_vector) %>%
+    filter(!is.na(ids)) %>%
+    distinct() %>%
+    as_vector() %>%
+    unname()
+}
+
+#Updates the db with info
 update_db <- function(con, registry, DF) {
   
   if (!is.null(DF)) {
@@ -80,78 +91,9 @@ update_db <- function(con, registry, DF) {
   }
   
 }
-results_count <- function(results_obj, index) {
-  results_obj[[index]]$count
-}
-get_xml_for_results <- function(results_object_item, count_list_item) {
-  if (count_list_item == 0) {
-    return(NULL)
-  }
-  else {
-    return(
-      articles_to_list(
-        entrez_fetch(db = 'pubmed', results_object_item$ids, rettype = 'xml')
-      ))
-  }
-}
-format_results_item <- function(results_item) {
-  map(results_item, article_to_df, getAuthor = FALSE, max_chars = -1) %>%
-    bind_rows()
-}
-get_dfs_from_results_obj <- function(results_obj_item, count_list_item) {
-  if (count_list_item == 0) {
-    return(NULL)
-  }
-  else {
-    return(
-      format_results_item(results_obj_item)
-    )
-  }
-}
-sleepy_entrez_search <- function(search_term, db = 'pubmed'){
-  Sys.sleep(0.3)
-  return(entrez_search(db = db, term = search_term))
-}
-create_search_list <- function(id_vector){
-  
-  tibble(ids = id_vector) %>% 
-    filter(!is.na(ids)) %>%
-    distinct() %>% 
-    mutate(ids = paste0(ids, " AND ",format(Sys.Date() - 1, "%Y/%m/%d"),"[edat]" )) %>% 
-    as_vector() %>% 
-    unname()
-}
-get_pubmed_arts <- function(ID_list) {
-  Results1 <- map(ID_list, sleepy_entrez_search, db = 'pubmed')
-  Counts <- map(seq_along(Results1), results_count, results_obj = Results1)
-  Results2 <- map2(Results1, Counts, get_xml_for_results)
-  Results3 <- map2(Results2, Counts, get_dfs_from_results_obj)
-  return(Results3)
-}
-format_arts_list <- function(arts_list) {
-  df1 <- arts_list %>%
-    bind_rows()
-  if ("pmid" %in% colnames(df1)) {
-    return(
-      df1 %>%
-        filter(!is.na(pmid)) %>%
-        rename("search" = ...15) %>%
-        mutate(
-          ID = str_extract(search, "([^\\s]+)"),
-          Query_Date = Sys.Date(),
-          doi = case_when((doi != "") ~ paste0('https://dx.doi.org/', doi),
-                          TRUE ~ "")
-        ) %>%
-        select(Query_Date, ID, doi, search, pmid:journal)
-    )
-  } else
-    return(NULL)
-}
-create_arts_DF <- function(search_query_list) {
-  get_pubmed_arts(search_query_list) %>% 
-    map2(search_query_list, bind_cols) %>% 
-    format_arts_list()
-}
+
+#source pubmed API functions
+source('PM_API_functions.R')
 
 # setup con to db
 con <- dbConnect(RSQLite::SQLite(), here("RSQLite_Data", "TrialTracker-db.sqlite"))
@@ -307,13 +249,12 @@ update_db(con, "ISRCTN", ISRCTN_DF)
 update_db(con, "NIHR", NIHR_DF)
 update_db(con, "EU", EU_DF)
 
-rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL, EU_URL)
+rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
 
 # pubmed call
 
 # set entrez key
 api <- read_file(here('Data_Files', 'entrez.key'))
-set_entrez_key(api)
 
 # Generate search lists
 NCT_PM_Searches <- create_search_list(Trial_IDs$NCT_Ids)
@@ -321,26 +262,26 @@ ISRCTN_PM_Searches <- create_search_list(Trial_IDs$ISRCTN_Ids)
 NIHR_PM_Searches <- create_search_list(Trial_IDs$NIHR_Ids)
 EU_PM_Searches <- create_search_list(Trial_IDs$EU_Ids)
 
-NCT_PM_DF <- create_arts_DF(NCT_PM_Searches) %>%
-  {if (is.null(.)) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
-  {if (is.null(.)) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
+NCT_PM_DF <- generate_pm_tibble_from_search_term_series(NCT_PM_Searches, api_object = api, reldate = 1) %>%
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
 
-ISRCTN_PM_DF <- create_arts_DF(ISRCTN_PM_Searches) %>%
-  {if (is.null(.)) . else left_join(., Trial_IDs, by = c("ID" = "ISRCTN_Ids"))} %>% 
-  {if (is.null(.)) . else select(., Guideline.number, everything(), -NCT_Ids, -NIHR_Ids, -EU_Ids)}
+ISRCTN_PM_DF <- generate_pm_tibble_from_search_term_series(ISRCTN_PM_Searches, api_object = api, reldate = 1) %>%
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
 
-NIHR_PM_DF <- create_arts_DF(NIHR_PM_Searches) %>%
-  {if (is.null(.)) . else left_join(., Trial_IDs, by = c("ID" = "NIHR_Ids"))} %>% 
-  {if (is.null(.)) . else select(., Guideline.number, everything(), -ISRCTN_Ids, -NCT_Ids, -EU_Ids)}
+NIHR_PM_DF <- generate_pm_tibble_from_search_term_series(NIHR_PM_Searches, api_object = api, reldate = 1) %>%
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
 
-EU_PM_DF <- create_arts_DF(EU_PM_Searches) %>%
-  {if (is.null(.)) . else left_join(., Trial_IDs, by = c("ID" = "EU_Ids"))} %>% 
-  {if (is.null(.)) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -NCT_Ids)}
+EU_PM_DF <- generate_pm_tibble_from_search_term_series(EU_PM_Searches, api_object = api, reldate = 1) %>%
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
 
-update_db(con, "NCT_PM", NCT_PM_DF)
-update_db(con, "ISRCTN_PM", ISRCTN_PM_DF)
-update_db(con, "NIHR_PM", NIHR_PM_DF)
-update_db(con, "EU_PM", EU_PM_DF)
+if(nrow(NCT_PM_DF)>0){update_db(con, "NCT_PM", NCT_PM_DF)}
+if(nrow(ISRCTN_PM_DF)>0){update_db(con, "ISRCTN_PM", ISRCTN_PM_DF)}
+if(nrow(NIHR_PM_DF)>0){update_db(con, "NIHR_PM", NIHR_PM_DF)}
+if(nrow(EU_PM_DF)>0){update_db(con, "EU_PM", EU_PM_DF)}
 
 rm(NCT_PM_Searches, ISRCTN_PM_Searches, NIHR_PM_Searches, EU_PM_Searches, Trial_IDs)
 
