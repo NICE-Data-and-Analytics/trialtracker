@@ -5,7 +5,7 @@
 options(echo = TRUE)
 
 #setwd - ugly hack to set filepath - comment out if run locally (setup 'here' at some point)
-setwd('//srv/shiny-server/trialtracker')
+#setwd('//srv/shiny-server/trialtracker')
 
 # libraries
 library(tidyverse)

@@ -844,19 +844,20 @@ observeEvent(input$registry_remove, {
 })
 
 #SQL query to remove all lines with this trial
-sql_delete <- "DELETE FROM Trial_Ids WHERE [?ColID] = ?ID_Selected"
+sql_delete <- "DELETE FROM Trial_Ids WHERE ?ColID = ?ID_Selected"
 
 exp_delete <- reactive({
   sqlInterpolate(
     con,
     sql_delete,
-    ColID = SQL(input$registry_remove),
-    ID_Selected = input$ID_remove
+    ColID = SQL(case_when(input$registry_remove == "NIHR_Ids" ~ "REPLACE(NIHR_Ids, '-', '')",
+                          TRUE ~ input$registry_remove)),
+    ID_Selected = if (input$registry_remove == "NIHR_Ids") {str_replace_all(input$ID_remove, "(/)|(-)", "")} else {input$ID_remove}
     )
 })
 
 #SQL to read in relevant rows
-sql_archive <- "SELECT * FROM ?Orig_Table WHERE [?ColID] = ?ID_Selected"
+sql_archive <- "SELECT * FROM ?Orig_Table WHERE ?ColID = ?ID_Selected"
 
 exp_archive_pull <- reactive({
   sqlInterpolate(
@@ -864,10 +865,10 @@ exp_archive_pull <- reactive({
     sql_archive,
     Orig_Table = SQL(str_sub(input$registry_remove, end=-5)),
     ColID = SQL(case_when(input$registry_remove == "NCT_Ids" ~ "NCTId",
-                          input$registry_remove == "NIHR_Ids" ~ "project_id",
+                          input$registry_remove == "NIHR_Ids" ~ "REPLACE(REPLACE(project_id,'-',''),'/','')",
                           input$registry_remove == "ISRCTN_Ids" ~ "ISRCTN_No",
                           input$registry_remove == "EU_Ids" ~ "EU_Ids")),
-    ID_Selected = input$ID_remove
+    ID_Selected = if (input$registry_remove == "NIHR_Ids") {str_replace_all(input$ID_remove, "(/)|(-)", "")} else {input$ID_remove}
   )
 })
 
