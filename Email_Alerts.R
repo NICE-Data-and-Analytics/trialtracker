@@ -86,7 +86,7 @@ if (!dir.exists(daily_path)) {
 }
 
 #List of programs (regex matches)
-prog_regexes <- c('COVID', 'IP', "^(?!COVID|IP).*") # last one is all but COVID|IP and is implied surveillance
+prog_regexes <- c('COVID', 'IP[0-9]', "^(?!COVID|IP[0-9]).*") # last one is all but COVID|IP and is implied surveillance
 
 #List of tables to iterate over
 registry_tables <- c("NCT", "ISRCTN", "NIHR", "EU")
