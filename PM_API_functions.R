@@ -1,4 +1,4 @@
-## Pubmed search
+#Pubmed search functions
 library(httr)
 library(tidyverse)
 library(xml2)
@@ -16,7 +16,6 @@ generate_esearch_url <- function(search_term, api_object, reldate = 1){
          )
   
 }
-
 get_esearch_results <- function(search_term, api_object, reldate = 1){
   
   Sys.sleep(0.1)
@@ -26,7 +25,6 @@ get_esearch_results <- function(search_term, api_object, reldate = 1){
     content()
   
 }
-
 generate_efetch_url <- function(pmid, api_object){
   
   paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed",
@@ -36,7 +34,6 @@ generate_efetch_url <- function(pmid, api_object){
          pmid)
   
 }
-
 get_efetch_results <- function(pmid, api_object){
   
   Sys.sleep(0.1)
@@ -46,7 +43,6 @@ get_efetch_results <- function(pmid, api_object){
     content()
   
 }
-
 return_pm_df <- function(single_id_query_results, search_term){
   
   tibble("ID" = search_term,
@@ -60,21 +56,12 @@ return_pm_df <- function(single_id_query_results, search_term){
          )
   
 }
-
 get_efetch_results_in_tibble_form <- function(pmid, api_object, search_term){
   
   get_efetch_results(pmid, api_object) %>% 
     return_pm_df(search_term = search_term)
   
 }
-
-# generate_pm_tibble_from_pmid_list <- function(pmid_list, api_object){
-#   
-#   map(pmid_list, get_efetch_results_in_tibble_form, api_object = api_object) %>% 
-#     bind_rows()
-#   
-# }
-
 generate_pm_tibble_from_search_term <- function(search_term, api_object, reldate = 1){
   
   id_results <- get_esearch_results(search_term, api_object = api_object, reldate = reldate)
@@ -83,7 +70,6 @@ generate_pm_tibble_from_search_term <- function(search_term, api_object, reldate
   map(id_list, get_efetch_results_in_tibble_form, api_object = api_object, search_term = search_term) %>% bind_rows()
   
 }
-
 generate_pm_tibble_from_search_term_series <- function(search_term_list, api_object, reldate = 1){
   
   map(search_term_list, generate_pm_tibble_from_search_term, api_object = api_object, reldate = reldate) %>% 
