@@ -264,19 +264,23 @@ EU_PM_Searches <- create_search_list(Trial_IDs$EU_Ids)
 
 NCT_PM_DF <- generate_pm_tibble_from_search_term_series(NCT_PM_Searches, api_object = api, reldate = 1) %>%
   {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)} %>% 
+  distinct()
 
 ISRCTN_PM_DF <- generate_pm_tibble_from_search_term_series(ISRCTN_PM_Searches, api_object = api, reldate = 1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "ISRCTN_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -NCT_Ids, -NIHR_Ids, -EU_Ids)} %>% 
+  distinct()
 
 NIHR_PM_DF <- generate_pm_tibble_from_search_term_series(NIHR_PM_Searches, api_object = api, reldate = 1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NIHR_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NCT_Ids, -EU_Ids)} %>% 
+  distinct()
 
 EU_PM_DF <- generate_pm_tibble_from_search_term_series(EU_PM_Searches, api_object = api, reldate = 1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)}  
+  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "EU_Ids"))} %>% 
+  {if (nrow(.)==0) . else select(.,Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -NCT_Ids)}  %>% 
+  distinct()
 
 if(nrow(NCT_PM_DF)>0){update_db(con, "NCT_PM", NCT_PM_DF)}
 if(nrow(ISRCTN_PM_DF)>0){update_db(con, "ISRCTN_PM", ISRCTN_PM_DF)}
