@@ -49,7 +49,8 @@ gen_pubmed_df <- function(con, registry_table, start_date, end_date, regex_patte
   dbReadTable(con = con, registry_table) %>% 
     filter(Query_Date >= start_date & Query_Date <= end_date,
            str_detect(Guideline.number, regex_pattern)) %>% 
-    mutate(Query_Date = as.Date(Query_Date, origin = "1970-01-01"))
+    mutate(Query_Date = as.Date(Query_Date, origin = "1970-01-01")) %>% 
+    distinct(doi, .keep_all = TRUE)
   
 }
 write_changes_to_disk <- function(Change_DF, DF_Name, prog_name = "") {

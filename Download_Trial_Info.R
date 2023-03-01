@@ -160,7 +160,7 @@ rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector
 NCT_DF <- GET(NCT_URL, verbose = TRUE) %>%
   content() %>%
   read_csv(skip = 9) %>%
-  right_join(Trial_IDs[, c("Guideline.number", "URL", "NCT_Ids")], by = c("NCTId" = "NCT_Ids")) %>%
+  right_join(Trial_IDs[, c("Guideline.number", "URL", "NCT_Ids")], by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
   filter(!is.na(NCTId)) %>%
   mutate(Query_Date = Sys.Date()) %>%
   select(Query_Date, Guideline.number, URL, everything(), -Rank)
@@ -192,7 +192,7 @@ ISRCTN_DF1 <- generate_ISRCTN_df(ISRCTN_URL1)
 ISRCTN_DF2 <- generate_ISRCTN_df(ISRCTN_URL2)
 
 ISRCTN_DF <- bind_rows(ISRCTN_DF1, ISRCTN_DF2) %>%
-  right_join(Trial_IDs[, c("Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids")) %>%
+  right_join(Trial_IDs[, c("Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids"), multiple = "all") %>%
   filter(!is.na(ISRCTN_No)) %>%
   mutate(Query_Date = Sys.Date()) %>%
   select(Query_Date, Guideline.number, URL, everything())
@@ -207,7 +207,7 @@ NIHR_Trial_IDs <- Trial_IDs %>%
 
 NIHR_DF <- NIHR_json %>%
   mutate("projectjoin" = str_replace_all(project_id, "[^\\d]", "")) %>%
-  right_join(NIHR_Trial_IDs, by = c("projectjoin")) %>%
+  right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") %>%
   drop_na(projectjoin) %>%
   mutate(Query_Date = Sys.Date()) %>%
   select(Query_Date, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date)
@@ -234,7 +234,7 @@ EU_DF <-
     con = eu_temp_db, stopifnodata = FALSE
   ) %>%
   mutate(EU_Ids = str_extract(`_id`, "^\\d{4}-\\d{6}-\\d{2}")) %>%
-  right_join(Trial_IDs) %>%
+  right_join(Trial_IDs, multiple = "all") %>%
   filter(!is.na(`_id`)) %>%
   mutate(Query_Date = Sys.Date()) %>%
   select(Query_Date, Guideline.number, URL, everything(),
