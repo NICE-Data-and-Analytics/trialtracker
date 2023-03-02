@@ -8,10 +8,22 @@ library(tidyverse)
 library(DBI)
 library(compareDF)
 library(emayili)
-library(here)
+
+#set paths
+path <- "/srv/shiny-server/trialtracker/"
+daily_path <- paste0(path, "Email_Attachments/", Sys.Date(), "/")
+if (!dir.exists(daily_path)) {
+  dir.create(daily_path)
+}
 
 # Setup con
-con <- dbConnect(RSQLite::SQLite(), here("RSQLite_Data/TrialTracker-db.sqlite"))
+con <- dbConnect(RSQLite::SQLite(), paste0(path, "RSQLite_Data/TrialTracker-db.sqlite"))
+
+#setup smtp settings
+smtp <- server(host = "smtp.mandrillapp.com",
+               port = 587,
+               username = "nice",
+               password = read_file(paste0(path, "Data_Files/mandrill_pwd.txt")))
 
 ### FUNCTIONS
 get_last_registry_entry_before_today <- function(registry) {
@@ -59,12 +71,12 @@ write_changes_to_disk <- function(Change_DF, DF_Name, prog_name = "") {
     
     create_output_table(Change_DF,
                         output_type = "xlsx",
-                        file_name = here(daily_path,
-                                         paste0(DF_Name,
+                        file_name = paste0(daily_path,
+                                                DF_Name,
                                                 prog_name,
                                                 "_Registry_Changes-",
                                                 Sys.Date(),
-                                                ".xlsx"))
+                                                ".xlsx")
     )
   }
 }
@@ -72,18 +84,14 @@ write_PM_dfs_to_disk <- function(PM_DF, PM_DF_Name, prog_name = "") {
   
   if (nrow(PM_DF) > 0 ) {
     write_csv(PM_DF,
-              here(daily_path,
+              paste0(daily_path,
                    prog_name, 
-                   paste0(PM_DF_Name, "_Publications_", Sys.Date(), ".csv")
+                   PM_DF_Name,
+                   "_Publications_",
+                   Sys.Date(),
+                   ".csv")
               )
-    )
   }
-}
-
-#Create daily_path
-daily_path <- here("Email_Attachments", Sys.Date())
-if (!dir.exists(daily_path)) {
-  dir.create(daily_path)
 }
 
 #List of programs (regex matches)
@@ -323,24 +331,13 @@ if (length(COVID_files) > 0) {
 }
 
 if (length(COVID_email$parts) > 1) {
-  smtp <- server(host = "smtp.mandrillapp.com",
-                 port = 587,
-                 username = "nice",
-                 password = read_file(here("Data_Files", "mandrill_pwd.txt")))
-  
   smtp(COVID_email, verbose = FALSE)
-  
 } else {
   COVID_email <- envelope() %>% 
     from("robert.willans@nice.org.uk") %>% 
     to("robert.willans@nice.org.uk") %>% 
     subject("TrialTracker ran today - COVID") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
-  
-  smtp <- server(host = "smtp.mandrillapp.com",
-                 port = 587,
-                 username = "nice",
-                 password = read_file(here("Data_Files", "mandrill_pwd.txt")))
   
   smtp(COVID_email, verbose = FALSE)
 }
@@ -368,11 +365,6 @@ if (length(IP_files) > 0) {
 }
 
 if (length(IP_email$parts) > 1) {
-  smtp <- server(host = "smtp.mandrillapp.com",
-                 port = 587,
-                 username = "nice",
-                 password = read_file(here("Data_Files", "mandrill_pwd.txt")))
-  
   smtp(IP_email, verbose = FALSE)
   
 } else {
@@ -381,12 +373,7 @@ if (length(IP_email$parts) > 1) {
     to("robert.willans@nice.org.uk") %>% 
     subject("TrialTracker ran today - IP") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
-  
-  smtp <- server(host = "smtp.mandrillapp.com",
-                 port = 587,
-                 username = "nice",
-                 password = read_file(here("Data_Files", "mandrill_pwd.txt")))
-  
+
   smtp(IP_email, verbose = FALSE)
 }
 
@@ -413,11 +400,7 @@ if (length(OTH_files) > 0) {
 }
 
 if (length(OTH_email$parts) > 1) {
-  smtp <- server(host = "smtp.mandrillapp.com",
-                 port = 587,
-                 username = "nice",
-                 password = read_file(here("Data_Files", "mandrill_pwd.txt")))
-  
+
   smtp(OTH_email, verbose = FALSE)
   
 } else {
@@ -426,11 +409,6 @@ if (length(OTH_email$parts) > 1) {
     to("robert.willans@nice.org.uk") %>% 
     subject("TrialTracker ran today - Other") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
-  
-  smtp <- server(host = "smtp.mandrillapp.com",
-                 port = 587,
-                 username = "nice",
-                 password = read_file(here("Data_Files", "mandrill_pwd.txt")))
-  
+
   smtp(OTH_email, verbose = FALSE)
 }

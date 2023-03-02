@@ -1,8 +1,8 @@
 #Pubmed search functions
 library(httr)
-library(tidyverse)
+library(dplyr)
+library(purrr)
 library(xml2)
-library(here)
 
 generate_esearch_url <- function(search_term, api_object, mindate = Sys.Date()-1, maxdate = Sys.Date()-1){
   
@@ -18,7 +18,6 @@ generate_esearch_url <- function(search_term, api_object, mindate = Sys.Date()-1
   )
   
 }
-
 get_esearch_results <- function(search_term, api_object, mindate = Sys.Date()-1, maxdate = Sys.Date()-1){
   
   Sys.sleep(0.1)

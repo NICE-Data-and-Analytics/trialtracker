@@ -4,8 +4,8 @@
 #options echo true
 options(echo = TRUE)
 
-#setwd - ugly hack to set filepath - comment out if run locally (setup 'here' at some point)
-#setwd('//srv/shiny-server/trialtracker')
+#setpath
+path <- "/srv/shiny-server/trialtracker/"
 
 # libraries
 library(tidyverse)
@@ -14,8 +14,6 @@ library(jsonlite)
 library(xml2)
 library(DBI)
 library(ctrdata)
-library(here)
-
 
 #print date for debug purposes
 Sys.Date()
@@ -93,10 +91,10 @@ update_db <- function(con, registry, DF) {
 }
 
 #source pubmed API functions
-source('PM_API_functions.R')
+source(paste0(path, 'PM_API_functions.R'))
 
 # setup con to db
-con <- dbConnect(RSQLite::SQLite(), here("RSQLite_Data", "TrialTracker-db.sqlite"))
+con <- dbConnect(RSQLite::SQLite(), paste0(path, "RSQLite_Data/TrialTracker-db.sqlite"))
 
 # Generate ID vectors
 Trial_IDs <- dbReadTable(con, "Trial_IDs")
@@ -217,7 +215,7 @@ rm(NIHR_Trial_IDs, NIHR_json)
 # EU
 
 # sqlite db
-eu_temp_db <- nodbi::src_sqlite(dbname = here("RSQLite_Data", "EU_temp_db.sqlite"), collection = "EU")
+eu_temp_db <- nodbi::src_sqlite(dbname = paste0(path, "RSQLite_Data/EU_temp_db.sqlite"), collection = "EU")
 
 try(ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
@@ -254,7 +252,7 @@ rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_UR
 # pubmed call
 
 # set entrez key
-api <- read_file(here('Data_Files', 'entrez.key'))
+api <- read_file(paste0(path, 'Data_Files/entrez.key'))
 
 # Generate search lists
 NCT_PM_Searches <- create_search_list(Trial_IDs$NCT_Ids)
@@ -294,4 +292,4 @@ dbDisconnect(con)
 
 ### EMAIL SECTION
 
-source('Email_Alerts.R', echo = TRUE)
+source(paste0(path, 'Email_Alerts.R'), echo = TRUE)
