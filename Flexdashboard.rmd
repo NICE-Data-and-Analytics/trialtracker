@@ -3,6 +3,8 @@ title: "Trial Tracker Dashboard"
 output:
   flexdashboard::flex_dashboard:
     orientation: rows
+    includes:
+      in_header: GA_Script.html
 runtime: shiny
 ---
 
@@ -71,7 +73,7 @@ dbReadTable(con, "NCT") %>%
   left_join(NCT_dates) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date, -SeeAlsoLinkURL) %>%
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   mutate(across(.fns = clean_UTF),
          PrimaryCompletionDate = mdy(PrimaryCompletionDate),
          CompletionDate = mdy(CompletionDate),
@@ -79,7 +81,7 @@ dbReadTable(con, "NCT") %>%
          LastUpdatePostDate = mdy(LastUpdatePostDate)
          )%>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `NCT ID` = NCTId,
     `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
@@ -90,6 +92,7 @@ dbReadTable(con, "NCT") %>%
     `Results Post Date` = ResultsFirstPostDate,
     `Last Update` = LastUpdatePostDate,
   ) %>%
+  arrange(desc(`Date Added`), Program, Guideline, `NCT ID`) %>% 
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE),
             filter = "top"
             )
@@ -109,13 +112,13 @@ dbReadTable(con, "ISRCTN") %>%
   left_join(ISRCTN_dates) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date) %>%
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   mutate(across(.fns = clean_UTF),
          Results_date_completed = dmy(Results_date_completed),
          Results_date_posted = dmy(Results_date_posted),
          Results_date_first_publication = dmy(Results_date_first_publication)) %>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `ISRCTN ID` = ISRCTN_No,
     Title = Public_Title,
     `Scientific Title` = Scientific_Title,
@@ -126,6 +129,7 @@ dbReadTable(con, "ISRCTN") %>%
     `Results posted date` = Results_date_posted,
     `Results published date` = Results_date_first_publication
   ) %>%
+  arrange(desc(`Date Added`), Program, Guideline, `ISRCTN ID`) %>% 
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
@@ -145,15 +149,16 @@ dbReadTable(con, "NIHR") %>%
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date) %>%
   left_join(NIHR_dates) %>%
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder
   mutate(across(.fns = clean_UTF)) %>%
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `NIHR ID` = project_id,
     `Project Title` = project_title,
     Status = project_status,
     `End Date` = end_date
   ) %>%
+  arrange(desc(`Date Added`), Program, Guideline, `NIHR ID`) %>% 
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
@@ -175,17 +180,18 @@ dbReadTable(con, "EU") %>%
   select(
     -Query_Date, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids, -short_id
   ) %>%
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   mutate(across(.fns = clean_UTF)) %>% 
   distinct() %>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `Clinicaltrials.eu ID` = `X_id`,
     `End of Trial Status` = p_end_of_trial_status,
     Title = a3_full_title_of_the_trial,
     `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
     `Sponsor ID` = a41_sponsors_protocol_code_number
   ) %>%
+  arrange(desc(`Date Added`), Program, Guideline, `Clinicaltrials.eu ID`) %>% 
   datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
@@ -230,6 +236,7 @@ compare_df(new_df,
   left_join(
       (new_df %>%
         select(BriefTitle,
+               Program,
                Guideline.number,
                URL,
                NCTId,
@@ -238,10 +245,9 @@ compare_df(new_df,
                Acronym,
                Comments
                )),
-    by = c("Guideline.number", "URL", "NCTId")
+    by = c("Program", "Guideline.number", "URL", "NCTId")
     ) %>% 
-  mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
-         URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
+  mutate(URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
          Title = str_trunc(BriefTitle, 80),
          Condition = str_trunc(Condition, 30)) %>% 
   mutate(across(.fns = clean_UTF),
@@ -251,7 +257,8 @@ compare_df(new_df,
          ) %>% 
   select(
     `Change` = chng_type,
-    "Program or Guideline" = Guideline.number,
+    Program,
+    "Guideline" = Guideline.number,
     URL = URL2,
     Acronym,
     Title,
@@ -288,15 +295,15 @@ compare_df(new_df,
            exclude = c("Query_Date", "Comments"),
            stop_on_error = FALSE)$comparison_df %>%
   left_join(new_df) %>% 
-  mutate(#`Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
-         Title = str_trunc(Scientific_Title,75)) %>% 
+  mutate(Title = str_trunc(Scientific_Title,75)) %>% 
   mutate(across(.fns = clean_UTF),
          Results_date_completed = dmy(Results_date_completed),
          Results_date_posted = dmy(Results_date_posted),
          Results_date_first_publication = dmy(Results_date_first_publication)
          ) %>% 
   select(Change = chng_type,
-         "Program or Guideline" = Guideline.number,
+         Program,
+         "Guideline" = Guideline.number,
          URL,
          Acronym,
          Title,
@@ -341,9 +348,9 @@ compare_df(
   mutate(across(.fns = clean_UTF)) %>% 
   select(
     Change = chng_type,
-    "Program or Guideline" = Guideline.number,
+    Program,
+    "Guideline" = Guideline.number,
     URL,
-    Guideline = Guideline.number,
     `NIHR ID` = project_id,
     Title,
     Status = project_status,
@@ -380,8 +387,8 @@ compare_df(
   mutate(across(.fns = clean_UTF)) %>% 
   select(
     Change = chng_type,
-    "Program or Guideline" = Guideline.number,
-#    `Query Date`,
+    Program,
+    "Guideline" = Guideline.number,
     URL,
     `EU ID` = EU_Ids,
     Status = p_end_of_trial_status,
@@ -414,7 +421,7 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   select(-contains(".x")) %>% 
   select(-contains(".y")) %>%
   left_join(NCT_dates) %>% 
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   select(-SeeAlsoLinkURL) %>% 
   mutate(across(.fns = clean_UTF),
          PrimaryCompletionDate = mdy(PrimaryCompletionDate),
@@ -423,7 +430,7 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
          LastUpdatePostDate = mdy(LastUpdatePostDate)
          )%>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `NCT ID` = NCTId,
     `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
@@ -454,13 +461,13 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   select(-contains(".x")) %>% 
   select(-contains(".y")) %>%
   left_join(ISRCTN_dates) %>% 
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   mutate(across(.fns = clean_UTF),
          Results_date_completed = dmy(Results_date_completed),
          Results_date_posted = dmy(Results_date_posted),
          Results_date_first_publication = dmy(Results_date_first_publication)) %>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `ISRCTN ID` = ISRCTN_No,
     Title = Public_Title,
     `Scientific Title` = Scientific_Title,
@@ -489,10 +496,10 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   select(-contains(".x")) %>% 
   select(-contains(".y")) %>%
   left_join(NIHR_dates) %>% 
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   mutate(across(.fns = clean_UTF)) %>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `NIHR ID` = project_id,
     `Project Title` = project_title,
     Status = project_status,
@@ -518,11 +525,11 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   left_join(EU_dates) %>% 
   select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids
   ) %>%
-  select(Guideline.number, `Date Added`, everything()) %>% # reorder 
+  select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   mutate(across(.fns = clean_UTF)) %>% 
   distinct() %>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `Clinicaltrials.eu ID` = `X_id`,
     `End of Trial Status` = p_end_of_trial_status,
     Title = a3_full_title_of_the_trial,
@@ -551,7 +558,8 @@ dbReadTable(con, "NCT_PM") %>%
   mutate(Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
          abstract = str_trunc(abstract, 200)) %>%
   select(
-    "Program or Guideline" = Guideline.number,
+    Program,
+    "Guideline" = Guideline.number,
     `Query Date` = Query_Date,
     `Trial ID` = ID,
     PMID = pmid,
@@ -574,7 +582,8 @@ dbReadTable(con, "ISRCTN_PM") %>%
   mutate(Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
          abstract = str_trunc(abstract, 200)) %>%
   select(
-    "Program or Guideline" = Guideline.number,
+    Program,
+    "Guideline" = Guideline.number,
     `Query Date` = Query_Date,
     `Trial ID` = ID,
     PMID = pmid,
@@ -596,7 +605,8 @@ dbReadTable(con, "NIHR_PM") %>%
   mutate(Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
          abstract = str_trunc(abstract, 200)) %>%
   select(
-    "Program or Guideline" = Guideline.number,
+    Program,
+    "Guideline" = Guideline.number,
     `Query Date` = Query_Date,
     `Trial ID` = ID,
     PMID = pmid,
@@ -619,7 +629,8 @@ if ("EU_PM" %in% dbListTables(con)) {
     mutate(Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
          abstract = str_trunc(abstract, 200)) %>%
     select(
-      "Program or Guideline" = Guideline.number,
+      Program,
+      "Guideline" = Guideline.number,
       `Query Date` = Query_Date,
       `Trial ID` = ID,
       PMID = pmid,
@@ -665,6 +676,7 @@ inputPanel("Add Single Trial",
                 "NIHR" = 'NIHR_Ids',
                 "Clinicaltrials.eu" = 'EU_Ids')
   ),
+  textInput('guideline_program_add', label = 'Enter program description', placeholder = "e.g. COVID, IP, Other"),
   textInput('guideline_reference_add', label = 'Enter guideline number(s)', placeholder = "e.g. CG179"),
   textInput('ID_add', label = 'Enter Trial ID reference number', placeholder = " e.g. NCT03597750"),
   textInput('URL_add',
@@ -679,13 +691,14 @@ mainPanel(textOutput('success'))
 #NB NEED TO GO BACK AND PURGE DOT FROM FIELD - ADDED SQ BRACKETS AS WORKAROUND FOR NOW
 
 sql_add <-
-     "INSERT INTO Trial_Ids ([Guideline.number], [URL], [?registry]) VALUES (?Guideline_Reference, ?URL, ?ID)"
+     "INSERT INTO Trial_Ids ([Program], [Guideline.number], [URL], [?registry]) VALUES (?program_value, ?Guideline_Reference, ?URL, ?ID)"
 
 exp_add <- reactive({
   sqlInterpolate(
     con,
     sql_add,
     registry = SQL(input$registry_add),
+    program_value = input$guideline_program_add,
     Guideline_Reference = input$guideline_reference_add,
     URL = str_trim(input$URL_add),
     ID = str_trim(input$ID_add))
@@ -1042,7 +1055,7 @@ dbReadTable(con, "NCT_rxv") %>%
          everything(),
          `Archiving Comments` = Archiving_Comments) %>% 
   rename(
-    "Program or Guideline" = Guideline.number,
+    "Guideline" = Guideline.number,
     `NCT ID` = NCTId,
     `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
@@ -1113,7 +1126,9 @@ dbReadTable(con, "NIHR_rxv") %>%
 dbReadTable(con, "EU_rxv") %>%
   select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids
   ) %>%
-  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(.fns = clean_UTF),
+         `Archive Date` = as_date(as.numeric(Query_Date))) %>% 
+  select(-Query_Date) %>% 
   rename(
     "Program or Guideline" = Guideline.number,
     `Clinicaltrials.eu ID` = `X_id`,

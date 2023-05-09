@@ -5,7 +5,8 @@
 options(echo = TRUE)
 
 #setpath
-path <- "/srv/shiny-server/trialtracker/"
+path <- "C:/RStudio_Projects/trialtracker/"
+#path <- "/srv/shiny-server/trialtracker-dev/"
 
 # libraries
 library(tidyverse)
@@ -158,10 +159,10 @@ rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector
 NCT_DF <- GET(NCT_URL, verbose = TRUE) %>%
   content() %>%
   read_csv(skip = 9) %>%
-  right_join(Trial_IDs[, c("Guideline.number", "URL", "NCT_Ids")], by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
+  right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")], by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
   filter(!is.na(NCTId)) %>%
   mutate(Query_Date = Sys.Date()) %>%
-  select(Query_Date, Guideline.number, URL, everything(), -Rank)
+  select(Query_Date, Program, Guideline.number, URL, everything(), -Rank)
 
 # ISRCTN
 generate_ISRCTN_df <- function(ISRCTN_URL){
@@ -190,16 +191,16 @@ ISRCTN_DF1 <- generate_ISRCTN_df(ISRCTN_URL1)
 ISRCTN_DF2 <- generate_ISRCTN_df(ISRCTN_URL2)
 
 ISRCTN_DF <- bind_rows(ISRCTN_DF1, ISRCTN_DF2) %>%
-  right_join(Trial_IDs[, c("Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids"), multiple = "all") %>%
+  right_join(Trial_IDs[, c("Program", "Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids"), multiple = "all") %>%
   filter(!is.na(ISRCTN_No)) %>%
   mutate(Query_Date = Sys.Date()) %>%
-  select(Query_Date, Guideline.number, URL, everything())
+  select(Query_Date, Program, Guideline.number, URL, everything())
 
 # NIHR
 NIHR_json <- fromJSON(url(NIHR_URL_API2))
 
 NIHR_Trial_IDs <- Trial_IDs %>%
-  select(Guideline.number, URL, NIHR_Ids) %>%
+  select(Program, Guideline.number, URL, NIHR_Ids) %>%
   drop_na(NIHR_Ids) %>%
   mutate("projectjoin" = str_replace_all(NIHR_Ids, "[^\\d]", ""))
 
@@ -208,18 +209,19 @@ NIHR_DF <- NIHR_json %>%
   right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") %>%
   drop_na(projectjoin) %>%
   mutate(Query_Date = Sys.Date()) %>%
-  select(Query_Date, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date)
+  select(Query_Date, Program, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date)
 
 rm(NIHR_Trial_IDs, NIHR_json)
 
 # EU
 
-# sqlite db
+# # sqlite db
 eu_temp_db <- nodbi::src_sqlite(dbname = paste0(path, "RSQLite_Data/EU_temp_db.sqlite"), collection = "EU")
 
 try(ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
 # Collapse fields into 1 vector
+
 EU_DF <-
   dbGetFieldsIntoDf(
     str_subset(
@@ -235,10 +237,10 @@ EU_DF <-
   right_join(Trial_IDs, multiple = "all") %>%
   filter(!is.na(`_id`)) %>%
   mutate(Query_Date = Sys.Date()) %>%
-  select(Query_Date, Guideline.number, URL, everything(),
+  select(Query_Date, Program, Guideline.number, URL, everything(),
          -NCT_Ids, -ISRCTN_Ids, -NIHR_Ids,
-         -Short..working.title.) %>% 
-  rename('X_id' = `_id`) %>% 
+         -Short..working.title.) %>%
+  rename('X_id' = `_id`) %>%
   unique()
 
 # Add to db if no record already today

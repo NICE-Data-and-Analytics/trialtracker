@@ -1,3 +1,3 @@
-Guideline.number,Short..working.title.,URL,NCT_Ids,ISRCTN_Ids,NIHR_Ids,EU_Ids
-CG187,Acute heart failure,https://clinicaltrials.gov/ct2/show/NCT01647932,NCT01647932,,,
-CG185,Bipolar disorder: assessment and management,http://www.isrctn.com/ISRCTN54234300,,ISRCTN54234300,,
+Program,Guideline.number,Short..working.title.,URL,NCT_Ids,ISRCTN_Ids,NIHR_Ids,EU_Ids
+COVID,CG187,Acute heart failure,https://clinicaltrials.gov/ct2/show/NCT01647932,NCT01647932,,,
+IP,CG185,Bipolar disorder: assessment and management,http://www.isrctn.com/ISRCTN54234300,,ISRCTN54234300,,
