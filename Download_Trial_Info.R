@@ -100,31 +100,43 @@ con <- dbConnect(RSQLite::SQLite(), paste0(path, "RSQLite_Data/TrialTracker-db.s
 # Generate ID vectors
 Trial_IDs <- dbReadTable(con, "Trial_IDs")
 half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids"))/2,0)
+half_NCT_Id_Vector <- round(length(concat_ids(Trial_IDs, "NCT_Ids"))/2,0)
 
 # Collapse Trial ID numbers into search term
-NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%20OR%20")
+#NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%20OR%20")
+NCT_Id_Vector1 <- concat_ids(Trial_IDs, "NCT_Ids")[1:half_NCT_Id_Vector] %>% paste0(collapse = "%20OR%20")
+NCT_Id_Vector2 <- concat_ids(Trial_IDs, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(Trial_IDs, "NCT_Ids"))] %>% paste0(collapse = "%20OR%20")
 ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] %>% paste0(collapse = "%20OR%20")
 ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] %>% paste0(collapse = "%20OR%20")
 NIHR_Id_Vector <- collapse_ids(Trial_IDs, "NIHR_Ids", "+OR+")
 EU_Vector <- collapse_ids(Trial_IDs, "EU_Ids", "+OR+")
 
 # Construct URLs
-# NCT
-NCT_URL <- paste0(
-  "https://www.clinicalTrials.gov/api/query/study_fields?expr=",
-  NCT_Id_Vector,
-  "&fields=",
-  paste("NCTid", "OrgStudyId", "Condition", "BriefTitle", "Acronym",
-        "OverallStatus", "PrimaryCompletionDate",
-        "CompletionDate", "ResultsFirstSubmitDate", "ResultsFirstPostDate",
-        "LastUpdatePostDate", "SeeAlsoLinkURL",
-        sep = ","
-  ),
-  "&min_rnk=1",
-  "&max_rnk=",
-  sum(!is.na(Trial_IDs$NCT_Ids)) + 10,
-  "&fmt=csv"
-)
+# NCT URL done in two parts as v large
+
+generate_NCT_URL <- function(NCT_ID_Vec, half_vec_length){
+  
+  paste0(
+    "https://www.clinicalTrials.gov/api/query/study_fields?expr=",
+    NCT_ID_Vec,
+    "&fields=",
+    paste("NCTid", "OrgStudyId", "Condition", "BriefTitle", "Acronym",
+          "OverallStatus", "PrimaryCompletionDate",
+          "CompletionDate", "ResultsFirstSubmitDate", "ResultsFirstPostDate",
+          "LastUpdatePostDate", "SeeAlsoLinkURL",
+          sep = ","
+    ),
+    "&min_rnk=1",
+    "&max_rnk=",
+    (half_vec_length + 10),
+    "&fmt=csv"
+  )
+  
+}
+
+NCT_URL_1 <- generate_NCT_URL(NCT_Id_Vector1, half_NCT_Id_Vector)
+NCT_URL_2 <- generate_NCT_URL(NCT_Id_Vector2, half_NCT_Id_Vector)
+
 
 #ISRCTN URL done in two parts as v large
 
@@ -150,15 +162,24 @@ EU_URL <- paste0(
   EU_Vector
 )
 
-rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
+rm(EU_Vector, NCT_Id_Vector1, NCT_Id_Vector2, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
 
 # Results DFs
 
 # NCT
 #verbose = true because for some reason this fails on linux otherwise....
-NCT_DF <- GET(NCT_URL, verbose = TRUE) %>%
-  content() %>%
-  read_csv(skip = 9) %>%
+generate_NCT_DF <- function(url){
+  
+  GET(url, verbose = TRUE) %>%
+    content() %>%
+    read_csv(skip = 9) 
+  
+}
+
+NCT_DF_1 <- generate_NCT_DF(NCT_URL_1)
+NCT_DF_2 <- generate_NCT_DF(NCT_URL_2)
+
+NCT_DF <- bind_rows(NCT_DF_1, NCT_DF_2) |> 
   right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")], by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
   filter(!is.na(NCTId)) %>%
   mutate(Query_Date = Sys.Date()) %>%
