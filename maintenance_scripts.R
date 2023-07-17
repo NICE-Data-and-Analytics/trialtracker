@@ -32,3 +32,22 @@ write_prog_col_to_df <- function(sql_table){
   dbWriteTable(con, sql_table, df, overwrite = TRUE)
   
 }
+
+# Function to remove duplicates from single table
+
+return_only_distinct <- function(con, table_name){
+  
+  DBI::dbReadTable(con, table_name) |> dplyr::distinct()
+  
+}
+
+# Function to remove duplicates and write back table (overwrite)
+
+remove_dups_and_overwrite_table <- function(table_name, con){
+  
+  clean <- return_only_distinct(con = con, table_name = table_name)
+  
+  dbWriteTable(conn = con, name = table_name, value = clean, overwrite = TRUE)
+  
+  
+}
