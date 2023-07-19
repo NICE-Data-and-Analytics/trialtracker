@@ -51,3 +51,16 @@ remove_dups_and_overwrite_table <- function(table_name, con){
   
   
 }
+
+#Function to switch all program = "NG" to program = "other"
+
+rename_ng_to_other <- function(table_name, con){
+  
+  tab <- DBI::dbReadTable(conn = con, name = table_name)
+  
+  tab_new <- tab |> mutate("Program" = case_when(Program == "NG" ~ "Other",
+                                                 TRUE ~ Program))
+    
+  DBI::dbWriteTable(conn = con, name = table_name, value = tab_new, overwrite = TRUE)
+  
+}
