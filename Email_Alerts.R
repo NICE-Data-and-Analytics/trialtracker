@@ -10,7 +10,9 @@ library(compareDF)
 library(emayili)
 
 #set paths
-path <- "/srv/shiny-server/trialtracker/"
+#path <- "/srv/shiny-server/trialtracker/"
+path <- "C:/RStudio_Projects/trialtracker/"
+
 daily_path <- paste0(path, "Email_Attachments/", Sys.Date(), "/")
 if (!dir.exists(daily_path)) {
   dir.create(daily_path)
