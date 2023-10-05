@@ -32,3 +32,5 @@ Email_Attachments
 RSQLite_Data
 #Logs
 Download_Trial_Info.log
+# Google analytics script
+GA_Script.html
