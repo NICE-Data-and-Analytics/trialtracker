@@ -20,7 +20,7 @@ runtime: shiny
 # 2) Move formatting/manipulation from markdown back to update script (and possibly back to initial input script from s-sheet)
 
 library(tidyverse)
-library(lubridate)
+#library(lubridate)
 library(DBI)
 library(flexdashboard)
 library(DT)
@@ -70,7 +70,7 @@ NCT_dates <- dbReadTable(con, "NCT") %>%
 
 dbReadTable(con, "NCT") %>%
   filter(NCTId %in% Ids$NCT_Ids) %>% 
-  left_join(NCT_dates) %>% 
+  left_join(NCT_dates) %>% # Add date added field
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date, -SeeAlsoLinkURL) %>%
   select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
