@@ -9,23 +9,24 @@ library(DBI)
 library(compareDF)
 library(emayili)
 
-#set paths
+# Use the here package to set the relative file path - this should prevent the need for swapping file paths
+here::i_am("trialtracker.Rproj")
 #path <- "/srv/shiny-server/trialtracker/"
-path <- "C:/RStudio_Projects/trialtracker/"
+#path <- "C:/RStudio_Projects/trialtracker/"
 
-daily_path <- paste0(path, "Email_Attachments/", Sys.Date(), "/")
+daily_path <- here::here("Email_Attachments", Sys.Date(), "/")
 if (!dir.exists(daily_path)) {
   dir.create(daily_path)
 }
 
 # Setup con
-con <- dbConnect(RSQLite::SQLite(), paste0(path, "RSQLite_Data/TrialTracker-db.sqlite"))
+con <- dbConnect(RSQLite::SQLite(), here::here("RSQLite_Data/TrialTracker-db.sqlite"))
 
 #setup smtp settings
 smtp <- server(host = "smtp.mandrillapp.com",
                port = 587,
                username = "nice",
-               password = read_file(paste0(path, "Data_Files/mandrill_pwd.txt")))
+               password = read_file(here::here("Data_Files/mandrill_pwd.txt")))
 
 ### FUNCTIONS
 get_last_registry_entry_before_today <- function(registry) {

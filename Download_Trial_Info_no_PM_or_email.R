@@ -4,8 +4,10 @@
 #options echo true
 options(echo = TRUE)
 
-#setpath
-path <- "C:/RStudio_Projects/trialtracker/"
+# Use the here package to set the relative file path - this should prevent the need for swapping file paths
+here::i_am("trialtracker.Rproj")
+#path <- "C:/RStudio_Projects/trialtracker/"
+#path <- "C:/RStudio_Projects/1_Data_and_Analytics_projects/2_Trial_tracker/trialtracker/"
 #path <- "/srv/shiny-server/trialtracker-dev/"
 
 # libraries
@@ -92,10 +94,10 @@ update_db <- function(con, registry, DF) {
 }
 
 #source pubmed API functions
-source(paste0(path, 'PM_API_functions.R'))
+source(here::here('PM_API_functions.R'))
 
 # setup con to db
-con <- dbConnect(RSQLite::SQLite(), paste0(path, "RSQLite_Data/TrialTracker-db.sqlite"))
+con <- dbConnect(RSQLite::SQLite(), here::here("RSQLite_Data/TrialTracker-db.sqlite"))
 
 # Generate ID vectors
 Trial_IDs <- dbReadTable(con, "Trial_IDs")
@@ -103,39 +105,33 @@ half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids"))/2,0)
 half_NCT_Id_Vector <- round(length(concat_ids(Trial_IDs, "NCT_Ids"))/2,0)
 
 # Collapse Trial ID numbers into search term
-#NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%20OR%20")
-NCT_Id_Vector1 <- concat_ids(Trial_IDs, "NCT_Ids")[1:half_NCT_Id_Vector] %>% paste0(collapse = "%20OR%20")
-NCT_Id_Vector2 <- concat_ids(Trial_IDs, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(Trial_IDs, "NCT_Ids"))] %>% paste0(collapse = "%20OR%20")
+NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%7C")
 ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] %>% paste0(collapse = "%20OR%20")
 ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] %>% paste0(collapse = "%20OR%20")
 NIHR_Id_Vector <- collapse_ids(Trial_IDs, "NIHR_Ids", "+OR+")
 EU_Vector <- collapse_ids(Trial_IDs, "EU_Ids", "+OR+")
 
 # Construct URLs
-# NCT URL done in two parts as v large
 
-generate_NCT_URL <- function(NCT_ID_Vec, half_vec_length){
-
-  paste0(
-    "https://www.clinicalTrials.gov/api/query/study_fields?expr=",
+# The clinicalTrial.gov API can handle 1000 request at a time. Above 1000 and the extract will need to be split.
+generate_NCT_URL <- function(NCT_ID_Vec){
+  
+  tmp <- paste0(
+    "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=",
     NCT_ID_Vec,
     "&fields=",
-    paste("NCTid", "OrgStudyId", "Condition", "BriefTitle", "Acronym",
+    paste("NCTId", "OrgStudyId", "Condition", 
+          "BriefTitle", "Acronym",
           "OverallStatus", "PrimaryCompletionDate",
           "CompletionDate", "ResultsFirstSubmitDate", "ResultsFirstPostDate",
           "LastUpdatePostDate", "SeeAlsoLinkURL",
-          sep = ","
-    ),
-    "&min_rnk=1",
-    "&max_rnk=",
-    (half_vec_length + 10),
-    "&fmt=csv"
-  )
-
+          sep = "%7C"),
+    "&pageSize=1000")
+  
+  return(tmp)
 }
 
-NCT_URL_1 <- generate_NCT_URL(NCT_Id_Vector1, half_NCT_Id_Vector)
-NCT_URL_2 <- generate_NCT_URL(NCT_Id_Vector2, half_NCT_Id_Vector)
+NCT_URL <- generate_NCT_URL(NCT_Id_Vector)
 
 
 #ISRCTN URL done in two parts as v large
@@ -170,21 +166,59 @@ rm(EU_Vector, NCT_Id_Vector1, NCT_Id_Vector2, NIHR_Id_Vector, ISRCTN_Id_Vector1,
 #verbose = true because for some reason this fails on linux otherwise....
 generate_NCT_DF <- function(url){
   
-  GET(url, verbose = TRUE) %>%
-    content() %>%
-    read_csv(skip = 9) 
+  tmp <- url %>% 
+    GET(verbose = TRUE) %>% 
+    content() %>% 
+    tibble() %>% 
+    head(1) %>% 
+    rename(studies = 1) %>% 
+    unnest_longer(studies) %>% 
+    unnest_wider(studies) %>% 
+    unnest_wider(protocolSection) %>% 
+    unnest_wider(c(identificationModule, statusModule, conditionsModule)) %>% 
+    unnest_wider(orgStudyIdInfo) %>% 
+    hoist(primaryCompletionDateStruct,
+          PrimaryCompletionDate = "date") %>% 
+    hoist(completionDateStruct,
+          CompletionDate = "date") %>% 
+    hoist(resultsFirstPostDateStruct,
+          ResultsFirstPostDate = "date") %>% 
+    hoist(lastUpdatePostDateStruct,
+          LastUpdatePostDate = "date") %>%
+    hoist(referencesModule,
+          SeeAlsoLinkURL = "url") %>%
+    unnest_wider(referencesModule) %>% 
+    rowwise() %>% 
+    mutate(Condition = str_c(unlist(conditions), 
+                             collapse = "|"),
+           SeeAlsoLinkURL = str_c(unlist(seeAlsoLinks), 
+                                  collapse = "|"),
+           OverallStatus = str_to_sentence(str_replace_all(overallStatus, "_", " ")),
+           OverallStatus = str_replace(OverallStatus, "Active not recruiting", "Active, not recruiting"),
+           OverallStatus = str_replace(OverallStatus, "Unknown", "Unknown status"),
+           .keep = "unused") %>% 
+    ungroup() %>% 
+    arrange(desc(nctId)) %>% 
+    mutate(Rank = row_number(), .before = 1) %>% 
+    janitor::clean_names("big_camel") %>% 
+    rename(NCTId = NctId,
+           OrgStudyId = Id,
+           SeeAlsoLinkURL = SeeAlsoLinkUrl) %>% 
+    select(Rank, NCTId, OrgStudyId, Condition, BriefTitle, Acronym, OverallStatus, everything()) %>% 
+    relocate(LastUpdatePostDate, .before = SeeAlsoLinkURL)
   
+  return(tmp)
 }
 
-NCT_DF_1 <- generate_NCT_DF(NCT_URL_1)
-NCT_DF_2 <- generate_NCT_DF(NCT_URL_2)
+NCT_DF <- generate_NCT_DF(NCT_URL)
 
-NCT_DF <- bind_rows(NCT_DF_1, NCT_DF_2) |> 
-  right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")], by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
+NCT_DF <- NCT_DF %>% 
+  right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")], 
+             by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
   filter(!is.na(NCTId)) %>%
   mutate(Query_Date = Sys.Date()) %>%
   select(Query_Date, Program, Guideline.number, URL, everything(), -Rank)
-  
+
 # ISRCTN
 generate_ISRCTN_df <- function(ISRCTN_URL){
   
@@ -236,13 +270,12 @@ rm(NIHR_Trial_IDs, NIHR_json)
 
 # EU
 
-# # sqlite db
-eu_temp_db <- nodbi::src_sqlite(dbname = paste0(path, "RSQLite_Data/EU_temp_db.sqlite"), collection = "EU")
+# sqlite db
+eu_temp_db <- nodbi::src_sqlite(dbname = here::here("RSQLite_Data/EU_temp_db.sqlite"), collection = "EU")
 
 try(ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
 # Collapse fields into 1 vector
-
 EU_DF <-
   dbGetFieldsIntoDf(
     str_subset(
@@ -270,4 +303,4 @@ update_db(con, "ISRCTN", ISRCTN_DF)
 update_db(con, "NIHR", NIHR_DF)
 update_db(con, "EU", EU_DF)
 
-rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL_1, NCT_URL_2, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
+rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL1, NCT_URL_2, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
