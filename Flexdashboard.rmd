@@ -675,10 +675,10 @@ There are two ways to add trials
 
 **Note that Trial ID reference number must be in the correct format. Eg:**
 
-Clinicaltrials.gov - "NCT03883230"
-ISRCTN - "ISRCTN11735271"
-NIHR - "14-158-02" or "14/158/02" or "RP-PG-0109-10056" 
-Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
+* Clinicaltrials.gov - "NCT03883230"  
+* ISRCTN - "ISRCTN11735271"  
+* NIHR - "14-158-02" or "14/158/02" or "RP-PG-0109-10056"  
+* Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
 
 
 ``` {r AddSingleTrial}
@@ -702,10 +702,12 @@ inputPanel("Add Single Trial",
             label = 'Paste URL to trial page in registry',
             placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750",
             width = '200%'),
-  actionButton("button_add", "Add trial")
+  actionButton("button_add", "Add trial"),
+  uiOutput("single_result")
 )
 
-mainPanel(textOutput('success'))
+# mainPanel(textOutput('single_success'),
+#           textOutput('single_fail'))
 
 #NB NEED TO GO BACK AND PURGE DOT FROM FIELD - ADDED SQ BRACKETS AS WORKAROUND FOR NOW
 
@@ -724,17 +726,32 @@ exp_add <- reactive({
 })
 
 observeEvent(input$button_add, {
-
-  shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trial - please wait while the dashboard refreshes in background....")
-
-  dbExecute(con, exp_add())
   
-  source('Download_Trial_Info_no_PM_or_email.R')
-
-  shinybusy::remove_modal_spinner()
-
-  output$success <- renderText("Trial Added! - please refresh browser to see trial details on Live Trial Info tab")
-
+  valid_id_check <- str_detect(input$ID_add, paste(c(NCT_pattern, EU_pattern, ISRCTN_pattern, NIHR_pattern), collapse = "|"))
+  
+  if(valid_id_check){
+    
+    shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trial - please wait while the dashboard refreshes in background....")
+    
+    dbExecute(con, exp_add())
+    
+    source('Download_Trial_Info_no_PM_or_email.R')
+    
+    shinybusy::remove_modal_spinner()
+    
+    output$single_result <- renderText({
+      HTML(as.character(div(style = "color: green;", 
+                            "Trial Added! - please refresh browser to see trial details on Live Trial Info tab")))
+      })
+    
+  } else if(!valid_id_check){
+    
+    output$single_result <- renderText({
+      HTML(as.character(div(style = "color: red;", 
+                            "Error - Invalid trial ID reference number, please check ID against the above approved formats")))
+      })
+    
+  }
 })
 
 ```
@@ -744,7 +761,8 @@ observeEvent(input$button_add, {
 inputPanel("Add Multiple Trials via csv file",
   downloadButton('downloadtemplate', label = "Download template"),
   fileInput('uploadtemplate', label = 'Upload completed template', multiple = FALSE, accept = '.csv'),
-  actionButton("button_add_multi", label = "Add trial spreadsheet"))
+  actionButton("button_add_multi", label = "Add trial spreadsheet"),
+  uiOutput("multi_result"))
 
 
 output$downloadtemplate <- downloadHandler(filename = function(){"trialuploadtemplate.csv"},
@@ -778,8 +796,20 @@ observeEvent(input$uploadtemplate, {
 
   if (length(errors)>0){
 
-  output$multi_error <- renderText({paste("ERROR - missing or incorrect Trial ID on line(s)", as.character(errors))})
+  #output$multi_error <- renderText({paste("ERROR - missing or incorrect Trial ID on line(s)", as.character(errors))})
+    output$multi_result <- renderText({
+      HTML(as.character(div(style = "color: red;", 
+                            paste("ERROR - Missing or incorrect Trial ID on line(s)", as.character(errors), 
+                                  ", please correct these IDs and reupload the file"))))
+    })
 
+  } else if(length(errors) ==0){
+    
+    output$multi_result <- renderText({
+      HTML(as.character(div(style = "color: green;", 
+                            "File has passed input checks and is ready for upload")))
+    })
+    
   }
 
 })
@@ -807,11 +837,19 @@ observeEvent(input$button_add_multi, {
   
   shinybusy::remove_modal_spinner()
 
-  output$multi_success <- renderText("Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab")
+  #output$multi_success <- renderText("Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab")
+  output$multi_result <- renderText({
+    HTML(as.character(div(style = "color: green;", 
+                          "Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab")))
+  })
 
   } else if (length(multi_errors)>0){
 
-  output$multi_fail <- renderText("Please correct errors in trial ID numbers on upload sheet before resubmitting")
+  #output$multi_fail <- renderText("Please correct errors in trial ID numbers on upload sheet before resubmitting")
+  output$multi_result <- renderText({
+      HTML(as.character(div(style = "color: red;", 
+                            "Error - Please correct errors in trial ID numbers on upload sheet before resubmitting")))
+      })
 
   }
 

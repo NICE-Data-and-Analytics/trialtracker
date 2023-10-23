@@ -158,7 +158,7 @@ EU_URL <- paste0(
   EU_Vector
 )
 
-rm(EU_Vector, NCT_Id_Vector1, NCT_Id_Vector2, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
+rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
 
 # Results DFs
 
@@ -303,7 +303,7 @@ update_db(con, "ISRCTN", ISRCTN_DF)
 update_db(con, "NIHR", NIHR_DF)
 update_db(con, "EU", EU_DF)
 
-rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL1, NCT_URL_2, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
+rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
 
 # pubmed call
 
