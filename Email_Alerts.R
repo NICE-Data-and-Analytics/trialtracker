@@ -317,7 +317,7 @@ COVID_email <- envelope() %>%
   to("niamh.knapton@nice.org.uk") %>%
   cc(
   "catherine.jacob@nice.org.uk",
-	"robert.willans@nice.org.uk") %>%
+	"robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk") %>%
   text(
     paste("Trial Tracking Changes - COVID",
           Sys.Date(),
@@ -338,7 +338,7 @@ if (length(COVID_email$parts) > 1) {
 } else {
   COVID_email <- envelope() %>% 
     from("robert.willans@nice.org.uk") %>% 
-    to("robert.willans@nice.org.uk") %>% 
+    to("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk") %>% 
     subject("TrialTracker ran today - COVID") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
   
@@ -351,7 +351,7 @@ IP_email <- envelope() %>%
   to("niamh.knapton@nice.org.uk") %>%
   cc(
     "catherine.jacob@nice.org.uk",
-     "robert.willans@nice.org.uk") %>%
+     "robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk") %>%
   text(
     paste("Trial Tracking Changes - IP",
           Sys.Date(),
@@ -373,7 +373,7 @@ if (length(IP_email$parts) > 1) {
 } else {
   IP_email <- envelope() %>% 
     from("robert.willans@nice.org.uk") %>% 
-    to("robert.willans@nice.org.uk") %>% 
+    to("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk") %>% 
     subject("TrialTracker ran today - IP") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
 
@@ -386,7 +386,7 @@ OTH_email <- envelope() %>%
   to("niamh.knapton@nice.org.uk") %>%
   cc(
     "catherine.jacob@nice.org.uk",
-    "robert.willans@nice.org.uk") %>%
+    "robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk") %>%
   text(
     paste("Trial Tracking Changes - Other",
           Sys.Date(),
@@ -409,7 +409,7 @@ if (length(OTH_email$parts) > 1) {
 } else {
   OTH_email <- envelope() %>% 
     from("robert.willans@nice.org.uk") %>% 
-    to("robert.willans@nice.org.uk") %>% 
+    to("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk") %>% 
     subject("TrialTracker ran today - Other") %>% 
     text(paste0("TrialTracker script completed successfully today (", Sys.Date(), ") but noted no changes"))
 
