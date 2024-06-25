@@ -4,15 +4,13 @@
 #options echo true
 options(echo = TRUE)
 
-# Use the here package to set the relative file path - this should prevent the need for swapping file paths
-here::i_am("trialtracker.Rproj")
+# Need to add a config or similar package to set path (or manually do this)
 #path <- "C:/RStudio_Projects/trialtracker/"
 #path <- "C:/RStudio_Projects/1_Data_and_Analytics_projects/2_Trial_tracker/trialtracker/"
 #path <- "/srv/shiny-server/trialtracker-dev/"
 
-# libraries
+#libraries
 library(tidyverse)
-#library(lubridate)
 library(httr)
 library(jsonlite)
 library(xml2)
@@ -94,30 +92,11 @@ update_db <- function(con, registry, DF) {
   
 }
 
-#source pubmed API functions
-source(here::here('PM_API_functions.R'))
-
-# setup con to db
-con <- dbConnect(RSQLite::SQLite(), here::here("RSQLite_Data/TrialTracker-db.sqlite"))
-
-# Generate ID vectors
-Trial_IDs <- dbReadTable(con, "Trial_IDs")
-half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids"))/2,0)
-half_NCT_Id_Vector <- round(length(concat_ids(Trial_IDs, "NCT_Ids"))/2,0)
-
-# Collapse Trial ID numbers into search term
-NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%7C")
-ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] %>% paste0(collapse = "%20OR%20")
-ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] %>% paste0(collapse = "%20OR%20")
-NIHR_Id_Vector <- collapse_ids(Trial_IDs, "NIHR_Ids", "+OR+")
-EU_Vector <- collapse_ids(Trial_IDs, "EU_Ids", "+OR+")
-
-# Construct URLs
-
-# The clinicalTrial.gov API can handle 1000 request at a time. Above 1000 and the extract will need to be split.
+#API call generating functions
+#Generate NCT URLS
 generate_NCT_URL <- function(NCT_ID_Vec){
   
-  tmp <- paste0(
+  api_url <- paste0(
     "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=",
     NCT_ID_Vec,
     "&fields=",
@@ -129,45 +108,15 @@ generate_NCT_URL <- function(NCT_ID_Vec){
           sep = "%7C"),
     "&pageSize=1000")
   
-  return(tmp)
+  return(api_url)
+  
 }
 
-NCT_URL <- generate_NCT_URL(NCT_Id_Vector)
-
-
-#ISRCTN URL done in two parts as v large
-
-ISRCTN_URL1 <- paste0(
-  "http://www.isrctn.com/api/query/format/who?q=",
-  ISRCTN_Id_Vector1,
-  "&limit=",
-  length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
-)
-
-ISRCTN_URL2 <- paste0(
-  "http://www.isrctn.com/api/query/format/who?q=",
-  ISRCTN_Id_Vector2,
-  "&limit=",
-  length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
-)
-
-NIHR_URL_API2 <-
-  "https://nihr.opendatasoft.com/api/v2/catalog/datasets/infonihr-open-dataset/exports/json?limit=-1&offset=0&lang=en&timezone=UTC"
-
-EU_URL <- paste0(
-  "https://www.clinicaltrialsregister.eu/ctr-search/search?query=",
-  EU_Vector
-)
-
-rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
-
-# Results DFs
-
-# NCT
+#Return NCT Dataframe
 #verbose = true because for some reason this fails on linux otherwise....
 generate_NCT_DF <- function(url){
   
-  tmp <- url %>% 
+  df <- url %>% 
     GET(verbose = TRUE) %>% 
     content() %>% 
     tibble() %>% 
@@ -208,19 +157,10 @@ generate_NCT_DF <- function(url){
     select(Rank, NCTId, OrgStudyId, Condition, BriefTitle, Acronym, OverallStatus, everything()) %>% 
     relocate(LastUpdatePostDate, .before = SeeAlsoLinkURL)
   
-  return(tmp)
+  return(df)
 }
 
-NCT_DF <- generate_NCT_DF(NCT_URL)
-
-NCT_DF <- NCT_DF %>% 
-  right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")], 
-             by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
-  filter(!is.na(NCTId)) %>%
-  mutate(Query_Date = Sys.Date()) %>%
-  select(Query_Date, Program, Guideline.number, URL, everything(), -Rank)
-
-# ISRCTN
+# Generate ISRCTN Dataframe
 generate_ISRCTN_df <- function(ISRCTN_URL){
   
   ISRCTN_XML <- GET(ISRCTN_URL) %>% content()
@@ -243,6 +183,78 @@ generate_ISRCTN_df <- function(ISRCTN_URL){
   )
 }
 
+# Source pubmed API functions
+source('PM_API_functions.R')
+
+# setup con to db
+con <- dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite")
+
+# Generate ID vectors
+Trial_IDs <- dbReadTable(con, "Trial_IDs")
+half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids"))/2,0)
+half_NCT_Id_Vector <- round(length(concat_ids(Trial_IDs, "NCT_Ids"))/2,0)
+
+# Collapse Trial ID numbers into search term
+#NCT_Id_Vector <- collapse_ids(Trial_IDs, "NCT_Ids", "%7C")
+NCT_Id_Vector1 <- concat_ids(Trial_IDs, "NCT_Ids")[1:half_NCT_Id_Vector] |> paste0(collapse = "%7C")
+NCT_Id_Vector2 <- concat_ids(Trial_IDs, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(Trial_IDs, "NCT_Ids"))] |> paste0(collapse = "%7C")
+ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] %>% paste0(collapse = "%20OR%20")
+ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] %>% paste0(collapse = "%20OR%20")
+NIHR_Id_Vector <- collapse_ids(Trial_IDs, "NIHR_Ids", "+OR+")
+EU_Vector <- collapse_ids(Trial_IDs, "EU_Ids", "+OR+")
+
+# Construct URLs
+
+# The clinicalTrial.gov API can handle 1000 request at a time. Above 1000 and the extract will need to be split.
+# Split URL into 2 as URL too long now
+
+#NCT_URL <- generate_NCT_URL(NCT_Id_Vector)
+NCT_URL1 <- generate_NCT_URL(NCT_Id_Vector1)
+NCT_URL2 <- generate_NCT_URL(NCT_Id_Vector2)
+
+#ISRCTN URL done in two parts as v large
+
+ISRCTN_URL1 <- paste0(
+  "http://www.isrctn.com/api/query/format/who?q=",
+  ISRCTN_Id_Vector1,
+  "&limit=",
+  length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
+)
+
+ISRCTN_URL2 <- paste0(
+  "http://www.isrctn.com/api/query/format/who?q=",
+  ISRCTN_Id_Vector2,
+  "&limit=",
+  length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
+)
+
+NIHR_URL_API2 <-
+  "https://nihr.opendatasoft.com/api/v2/catalog/datasets/infonihr-open-dataset/exports/json?limit=-1&offset=0&lang=en&timezone=UTC"
+
+EU_URL <- paste0(
+  "https://www.clinicaltrialsregister.eu/ctr-search/search?query=",
+  EU_Vector
+)
+
+rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
+
+# Results DFs
+
+# NCT
+
+#NCT_DF <- generate_NCT_DF(NCT_URL)
+NCT_DF1 <- generate_NCT_DF(NCT_URL1)
+NCT_DF2 <- generate_NCT_DF(NCT_URL2)
+NCT_DF <- bind_rows(NCT_DF1, NCT_DF2)
+
+NCT_DF <- NCT_DF %>% 
+  right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")], 
+             by = c("NCTId" = "NCT_Ids"), multiple = "all") %>%
+  filter(!is.na(NCTId)) %>%
+  mutate(Query_Date = Sys.Date()) %>%
+  select(Query_Date, Program, Guideline.number, URL, everything(), -Rank)
+
+# ISRCTN
 ISRCTN_DF1 <- generate_ISRCTN_df(ISRCTN_URL1)
 ISRCTN_DF2 <- generate_ISRCTN_df(ISRCTN_URL2)
 
@@ -272,7 +284,7 @@ rm(NIHR_Trial_IDs, NIHR_json)
 # EU
 
 # sqlite db
-eu_temp_db <- nodbi::src_sqlite(dbname = here::here("RSQLite_Data/EU_temp_db.sqlite"), collection = "EU")
+eu_temp_db <- nodbi::src_sqlite(dbname = "RSQLite_Data/EU_temp_db.sqlite", collection = "EU")
 
 try(ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
@@ -304,4 +316,4 @@ update_db(con, "ISRCTN", ISRCTN_DF)
 update_db(con, "NIHR", NIHR_DF)
 update_db(con, "EU", EU_DF)
 
-rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
+rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL1, NCT_URL2, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)

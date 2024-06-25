@@ -20,7 +20,6 @@ runtime: shiny
 # 2) Move formatting/manipulation from markdown back to update script (and possibly back to initial input script from s-sheet)
 
 library(tidyverse)
-#library(lubridate)
 library(DBI)
 library(flexdashboard)
 library(DT)
