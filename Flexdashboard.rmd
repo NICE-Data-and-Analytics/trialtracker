@@ -73,12 +73,9 @@ dbReadTable(con, "NCT") %>%
   slice_max(Query_Date, n = 1, with_ties = TRUE) %>%
   select(-Query_Date, -SeeAlsoLinkURL) %>%
   select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
-  mutate(across(.fns = clean_UTF),
-         PrimaryCompletionDate = mdy(PrimaryCompletionDate),
-         CompletionDate = mdy(CompletionDate),
-         ResultsFirstSubmitDate = mdy(ResultsFirstSubmitDate),
-         LastUpdatePostDate = mdy(LastUpdatePostDate)
-         )%>% 
+  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(c(PrimaryCompletionDate:LastUpdatePostDate),
+                \(x) as_date(parse_date_time(x, c('ymd', 'bdy'), truncated = 1)))) |> 
   rename(
     "Guideline" = Guideline.number,
     `NCT ID` = NCTId,
@@ -216,12 +213,14 @@ Row {.tabset .tabset-fade}
 
 new_df <- dbReadTable(con, "NCT") %>%
   filter(NCTId %in% Ids$NCT_Ids) %>% 
-  slice_max(Query_Date, n = 1, with_ties = TRUE)
+  slice_max(Query_Date, n = 1, with_ties = TRUE) |> 
+  mutate(across(c(PrimaryCompletionDate:LastUpdatePostDate), \(x) as_date(parse_date_time(x, c('ymd', 'bdy'), truncated = 1))))
 
 old_df <- dbReadTable(con, "NCT") %>%
   filter(Query_Date <= Sys.Date() - 31,
 	NCTId %in% Ids$NCT_Ids) %>% 
-  slice_max(Query_Date, n = 1, with_ties = TRUE)
+  slice_max(Query_Date, n = 1, with_ties = TRUE) |> 
+  mutate(across(c(PrimaryCompletionDate:LastUpdatePostDate), \(x) as_date(parse_date_time(x, c('ymd', 'bdy'), truncated = 1))))
 
 compare_df(new_df,
            old_df,
@@ -233,6 +232,7 @@ compare_df(new_df,
                        , "Acronym"
                        , "PrimaryCompletionDate"
                        , "ResultsFirstSubmitDate"
+                       , "SeeAlsoLinkURL"
                        ),
            stop_on_error = FALSE
            )$comparison_df %>%
@@ -253,11 +253,8 @@ compare_df(new_df,
   mutate(URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
          Title = str_trunc(BriefTitle, 80),
          Condition = str_trunc(Condition, 30)) %>% 
-  mutate(across(.fns = clean_UTF),
-         CompletionDate = mdy(CompletionDate),
-         ResultsFirstSubmitDate = mdy(ResultsFirstSubmitDate),
-         LastUpdatePostDate = mdy(LastUpdatePostDate)
-         ) %>% 
+  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(c(CompletionDate:LastUpdatePostDate), \(x) as_date(parse_date_time(x, c('ymd', 'bdy'), truncated = 1)))) |> 
   select(
     `Change` = chng_type,
     Program,
@@ -303,8 +300,8 @@ compare_df(new_df,
   mutate(across(.fns = clean_UTF),
          Results_date_completed = dmy(Results_date_completed),
          Results_date_posted = dmy(Results_date_posted),
-         Results_date_first_publication = dmy(Results_date_first_publication)
-         ) %>% 
+         Results_date_first_publication = dmy(Results_date_first_publication) 
+         ) |> 
   select(Change = chng_type,
          Program,
          "Guideline" = Guideline.number,
@@ -375,7 +372,7 @@ new_df <- dbReadTable(con, "EU") %>%
   slice_max(Query_Date, n = 1, with_ties = TRUE)
 
 old_df <- dbReadTable(con, "EU") %>%
-  filter(Query_Date <= Sys.Date() - 31,
+  filter(Query_Date <= Sys.Date() - 30,
 	 EU_Ids %in% Ids$EU_Ids
 	) %>% 
   slice_max(Query_Date, n = 1, with_ties = TRUE)
@@ -430,12 +427,8 @@ inner_join(current, old, by = names(current)[2:(ncol(current)-1)], keep = FALSE)
   left_join(NCT_dates) %>% 
   select(Program, Guideline.number, `Date Added`, everything()) %>% # reorder 
   select(-SeeAlsoLinkURL) %>% 
-  mutate(across(.fns = clean_UTF),
-         PrimaryCompletionDate = mdy(PrimaryCompletionDate),
-         CompletionDate = mdy(CompletionDate),
-         ResultsFirstSubmitDate = mdy(ResultsFirstSubmitDate),
-         LastUpdatePostDate = mdy(LastUpdatePostDate)
-         )%>% 
+  mutate(across(.fns = clean_UTF)) %>% 
+  mutate(across(c(PrimaryCompletionDate:LastUpdatePostDate), \(x) as_date(parse_date_time(x, c('ymd', 'bdy'), truncated = 1)))) |> 
   rename(
     "Guideline" = Guideline.number,
     `NCT ID` = NCTId,

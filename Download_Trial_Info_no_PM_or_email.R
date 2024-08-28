@@ -5,9 +5,8 @@
 options(echo = TRUE)
 
 # Need to add a config or similar package to set path (or manually do this)
-#path <- "C:/RStudio_Projects/trialtracker/"
-#path <- "C:/RStudio_Projects/1_Data_and_Analytics_projects/2_Trial_tracker/trialtracker/"
-#path <- "/srv/shiny-server/trialtracker-dev/"
+setwd("/srv/shiny-server/trialtracker/")
+#setwd("C:/RStudio_Projects/trialtracker/")
 
 #libraries
 library(tidyverse)
@@ -163,7 +162,7 @@ generate_NCT_DF <- function(url){
 # Generate ISRCTN Dataframe
 generate_ISRCTN_df <- function(ISRCTN_URL){
   
-  ISRCTN_XML <- GET(ISRCTN_URL) %>% content()
+  ISRCTN_XML <- GET(ISRCTN_URL) %>% content(encoding = 'UTF-8')
   
   tibble(
     "ISRCTN_No" = xml_text(xml_find_all(ISRCTN_XML, ".//trial_id")),
@@ -236,7 +235,7 @@ EU_URL <- paste0(
   EU_Vector
 )
 
-rm(EU_Vector, NCT_Id_Vector, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
+rm(EU_Vector, NCT_Id_Vector1, NCT_Id_Vector2, NIHR_Id_Vector, ISRCTN_Id_Vector1, ISRCTN_Id_Vector2)
 
 # Results DFs
 
@@ -298,7 +297,7 @@ EU_DF <-
       ),
       "_it|_es|_fr|_nl",
       negate = TRUE),
-    con = eu_temp_db, stopifnodata = FALSE
+    con = eu_temp_db
   ) %>%
   mutate(EU_Ids = str_extract(`_id`, "^\\d{4}-\\d{6}-\\d{2}")) %>%
   right_join(Trial_IDs, multiple = "all") %>%
