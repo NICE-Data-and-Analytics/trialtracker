@@ -32,25 +32,25 @@ concat_ids <- function(df, id_col) {
     drop_na()
   
   if (nrow(df) > 0) {
-      
+    
     return(
       df %>%
         filter(if_any(.cols = everything(), .fns = ~(. !=""))) %>% 
         unique() %>%
         as_vector() %>%
         unname()
-  )
+    )
   }
   
   else
-  
+    
     return(
       df %>% 
         unique() %>%
         as_vector() %>%
         unname()
-           )  
-    
+    )  
+  
 }
 collapse_ids <- function(df, id_col, paste_collapse) {
   concat_ids(df, id_col) %>%
@@ -183,7 +183,7 @@ generate_ISRCTN_df <- function(ISRCTN_URL){
 }
 
 # Source pubmed API functions
-source('PM_API_functions.R')
+source('R/PM_API_functions.R')
 
 # setup con to db
 con <- dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite")
@@ -207,6 +207,7 @@ EU_Vector <- collapse_ids(Trial_IDs, "EU_Ids", "+OR+")
 # The clinicalTrial.gov API can handle 1000 request at a time. Above 1000 and the extract will need to be split.
 # Split URL into 2 as URL too long now
 
+#NCT_URL <- generate_NCT_URL(NCT_Id_Vector)
 NCT_URL1 <- generate_NCT_URL(NCT_Id_Vector1)
 NCT_URL2 <- generate_NCT_URL(NCT_Id_Vector2)
 
@@ -239,6 +240,8 @@ rm(EU_Vector, NCT_Id_Vector1, NCT_Id_Vector2, NIHR_Id_Vector, ISRCTN_Id_Vector1,
 # Results DFs
 
 # NCT
+
+#NCT_DF <- generate_NCT_DF(NCT_URL)
 NCT_DF1 <- generate_NCT_DF(NCT_URL1)
 NCT_DF2 <- generate_NCT_DF(NCT_URL2)
 NCT_DF <- bind_rows(NCT_DF1, NCT_DF2)
@@ -295,7 +298,7 @@ EU_DF <-
       "_it|_es|_fr|_nl",
       negate = TRUE),
     con = eu_temp_db
-    ) %>%
+  ) %>%
   mutate(EU_Ids = str_extract(`_id`, "^\\d{4}-\\d{6}-\\d{2}")) %>%
   right_join(Trial_IDs, multiple = "all") %>%
   filter(!is.na(`_id`)) %>%
@@ -313,48 +316,3 @@ update_db(con, "NIHR", NIHR_DF)
 update_db(con, "EU", EU_DF)
 
 rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL1, NCT_URL2, ISRCTN_URL1, ISRCTN_URL2, NIHR_URL_API2, EU_URL)
-
-# pubmed call
-
-# set entrez key
-api <- read_file('Data_Files/entrez.key')
-
-# Generate search lists
-NCT_PM_Searches <- create_search_list(Trial_IDs$NCT_Ids)
-ISRCTN_PM_Searches <- create_search_list(Trial_IDs$ISRCTN_Ids)
-NIHR_PM_Searches <- create_search_list(Trial_IDs$NIHR_Ids)
-EU_PM_Searches <- create_search_list(Trial_IDs$EU_Ids)
-
-NCT_PM_DF <- generate_pm_tibble_from_search_term_series(NCT_PM_Searches, api_object = api, mindate = Sys.Date()-1, maxdate = Sys.Date()-1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NCT_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(., Program, Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -EU_Ids)} %>% 
-  distinct()
-
-ISRCTN_PM_DF <- generate_pm_tibble_from_search_term_series(ISRCTN_PM_Searches, api_object = api, mindate = Sys.Date()-1, maxdate = Sys.Date()-1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "ISRCTN_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(., Program, Guideline.number, everything(), -NCT_Ids, -NIHR_Ids, -EU_Ids)} %>% 
-  distinct()
-
-NIHR_PM_DF <- generate_pm_tibble_from_search_term_series(NIHR_PM_Searches, api_object = api, mindate = Sys.Date()-1, maxdate = Sys.Date()-1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "NIHR_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(., Program, Guideline.number, everything(), -ISRCTN_Ids, -NCT_Ids, -EU_Ids)} %>% 
-  distinct()
-
-EU_PM_DF <- generate_pm_tibble_from_search_term_series(EU_PM_Searches, api_object = api, mindate = Sys.Date()-1, maxdate = Sys.Date()-1) %>%
-  {if (nrow(.)==0) . else left_join(.,Trial_IDs, by = c("ID" = "EU_Ids"))} %>% 
-  {if (nrow(.)==0) . else select(., Program, Guideline.number, everything(), -ISRCTN_Ids, -NIHR_Ids, -NCT_Ids)}  %>% 
-  distinct()
-
-if(nrow(NCT_PM_DF)>0){update_db(con, "NCT_PM", NCT_PM_DF)}
-if(nrow(ISRCTN_PM_DF)>0){update_db(con, "ISRCTN_PM", ISRCTN_PM_DF)}
-if(nrow(NIHR_PM_DF)>0){update_db(con, "NIHR_PM", NIHR_PM_DF)}
-if(nrow(EU_PM_DF)>0){update_db(con, "EU_PM", EU_PM_DF)}
-
-rm(NCT_PM_Searches, ISRCTN_PM_Searches, NIHR_PM_Searches, EU_PM_Searches, Trial_IDs)
-
-# disconnect db
-dbDisconnect(con)
-
-### EMAIL SECTION
-
-source('Email_Alerts.R', echo = TRUE)

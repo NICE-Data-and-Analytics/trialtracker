@@ -727,7 +727,7 @@ observeEvent(input$button_add, {
     
     dbExecute(con, exp_add())
     
-    source('Download_Trial_Info_no_PM_or_email.R')
+    source('R/Download_Trial_Info_no_PM_or_email.R')
     
     shinybusy::remove_modal_spinner()
     
@@ -825,7 +825,7 @@ observeEvent(input$button_add_multi, {
 
   DBI::dbAppendTable(con, "Trial_Ids", to_add())
 
-  source('Download_Trial_Info_no_PM_or_email.R')
+  source('R/Download_Trial_Info_no_PM_or_email.R')
   
   shinybusy::remove_modal_spinner()
 
@@ -943,7 +943,7 @@ observeEvent(input$button_delete, {
 
   dbExecute(con, exp_delete())
 
-  source('Download_Trial_Info_no_PM_or_email.R')
+  source('R/Download_Trial_Info_no_PM_or_email.R')
 
   shinybusy::remove_modal_spinner()
 
@@ -964,7 +964,7 @@ observeEvent(input$button_archive, {
 
   dbExecute(con, exp_delete())
 
-  source('Download_Trial_Info_no_PM_or_email.R')
+  source('R/Download_Trial_Info_no_PM_or_email.R')
   
   shinybusy::remove_modal_spinner()
 
