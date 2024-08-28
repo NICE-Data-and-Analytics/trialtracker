@@ -317,7 +317,7 @@ rm(NCT_DF, ISRCTN_DF, NIHR_DF, EU_DF, NCT_URL1, NCT_URL2, ISRCTN_URL1, ISRCTN_UR
 # pubmed call
 
 # set entrez key
-api <- read_file('Data_Files/entrez.key')
+api <- read_file('Secrets/entrez.key')
 
 # Generate search lists
 NCT_PM_Searches <- create_search_list(Trial_IDs$NCT_Ids)

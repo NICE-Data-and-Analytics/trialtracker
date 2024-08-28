@@ -26,7 +26,7 @@ smtp <- server(
   host = "smtp.mandrillapp.com",
   port = 587,
   username = "nice",
-  password = read_file("Data_Files/mandrill_pwd.txt")
+  password = read_file("Secrets/mandrill_pwd.txt")
 )
 
 ### FUNCTIONS
