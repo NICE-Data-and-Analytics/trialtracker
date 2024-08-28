@@ -1,7 +1,12 @@
 # File to create a monthly backup of the SQLlite database files 
 
+# Create a directory to store monthly SQLlite backups if it doesn't already exist
+if (!dir.exists("Monthly_SQLite_backup")) {
+  dir.create("Monthly_SQLite_backup")
+}
+
 # Set the current monthly path
-monthly_path <- file.path(getwd(), "Monthly_SQLlite_backup", 
+monthly_path <- file.path(getwd(), "Monthly_SQLite_backup", 
                            stringr::str_sub(as.character(Sys.Date()), 1, 7))
 
 # Create a directory to store this months SQLlite backup if it doesn't already exist
