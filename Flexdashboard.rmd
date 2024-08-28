@@ -4,7 +4,7 @@ output:
   flexdashboard::flex_dashboard:
     orientation: rows
     includes:
-      in_header: GA_Script.html
+      in_header: Secrets/GA_Script.html
 runtime: shiny
 ---
 
