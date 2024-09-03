@@ -10,10 +10,10 @@ library(compareDF)
 library(emayili)
 
 # To add path into config file or somesuch
-# path <- "/srv/shiny-server/trialtracker/"
-# path <- "C:/RStudio_Projects/trialtracker/"
+#path <- "/srv/shiny-server/trialtracker-dev/"
+#path <- "C:/RStudio_Projects/trialtracker/"
 
-daily_path <- paste("Email_Attachments", Sys.Date(), sep = "/")
+daily_path <- paste0("Email_Attachments", '/', Sys.Date(), '/')
 if (!dir.exists(daily_path)) {
   dir.create(daily_path)
 }
@@ -39,7 +39,6 @@ get_last_registry_entry_before_today <- function(registry) {
     as.Date(origin = "1970-01-01") %>%
     unlist()
 }
-
 pull_change <- function(registry_table, con, start_date, end_date, group_cols = NULL, exclude_cols = NULL, regex_pattern = ".") {
   if (length(start_date) == 0) {
     df_old <- dbReadTable(con, registry_table)[0, ]
