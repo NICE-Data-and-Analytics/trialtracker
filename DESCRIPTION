@@ -1,0 +1,33 @@
+Package: trialtracker
+Title: Creates a Dashboard for monitoring clinical trial status
+Version: 0.0.0.9000
+Authors@R: 
+    person("Robert", "Willans", , "robertjwillans@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-3461-9691"))
+Description: The Trialtracker dashboard is an shinydashboard implementation which monitors clinical trials, displaying basic information on trial status in a dashboard. It also provides email updates when a change in status is detected.
+License: use_proprietary_license()
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: 
+    compareDF, 
+    ctrdata, 
+    DBI, 
+    dplyr, 
+    DT, 
+    emayili, 
+    flexdashboard, 
+    httr, 
+    janitor, 
+    jsonlite, 
+    lubridate,
+    readr, 
+    readxl, 
+    RSQLite, 
+    shiny, 
+    shinybusy, 
+    stringr, 
+    tibble, 
+    tidyselect, 
+    tidyr, 
+    xml2
