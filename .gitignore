@@ -39,3 +39,4 @@ Secrets
 Monthly_SQLite_backup
 .Rproj.user
 .lintr
+.Rbuildignore
