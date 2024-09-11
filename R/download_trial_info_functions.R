@@ -36,17 +36,17 @@ create_search_list <- function(trial_id_df, registry) {
 }
 
 # Updates the db with info
-update_db <- function(con, registry, DF) {
+update_db <- function(main_con, registry, DF) {
   if (!is.null(DF)) {
-    if (!(registry %in% DBI::dbListTables(con))) {
-      DBI::dbCreateTable(con, registry, DF)
-      DBI::dbAppendTable(con, registry, DF)
-    } else if (nrow(DBI::dbReadTable(con, registry) |> dplyr::filter(Query_Date == Sys.Date())) == 0) {
-      DBI::dbAppendTable(con, registry, DF)
-    } else if (nrow(DBI::dbReadTable(con, registry) |> dplyr::filter(Query_Date == Sys.Date())) > 0) {
-      temp_df <- DBI::dbReadTable(con, registry) |> dplyr::filter(Query_Date < Sys.Date())
-      DBI::dbWriteTable(con, registry, temp_df, overwrite = TRUE)
-      DBI::dbAppendTable(con, registry, DF)
+    if (!(registry %in% DBI::dbListTables(main_con))) {
+      DBI::dbCreateTable(main_con, registry, DF)
+      DBI::dbAppendTable(main_con, registry, DF)
+    } else if (nrow(DBI::dbReadTable(main_con, registry) |> dplyr::filter(Query_Date == Sys.Date())) == 0) {
+      DBI::dbAppendTable(main_con, registry, DF)
+    } else if (nrow(DBI::dbReadTable(main_con, registry) |> dplyr::filter(Query_Date == Sys.Date())) > 0) {
+      temp_df <- DBI::dbReadTable(main_con, registry) |> dplyr::filter(Query_Date < Sys.Date())
+      DBI::dbWriteTable(main_con, registry, temp_df, overwrite = TRUE)
+      DBI::dbAppendTable(main_con, registry, DF)
     }
   }
 }
@@ -153,11 +153,11 @@ generate_ISRCTN_df <- function(ISRCTN_URL) {
 }
 # Function to update pubmed tables for one registry
 generate_pubmed_results_from_search_terms_and_update_db_one_registry <- function(registry,
-                                                                                 trial_id_df = Trial_IDs,
-                                                                                 con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
+                                                                                 trial_id_df,
+                                                                                 main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
                                                                                  mindate = Sys.Date() - 1,
                                                                                  maxdate = Sys.Date() - 1) {
-  api <- readr::read_file("Secrets/entrez.key")
+  api <- readr::read_file("secrets/entrez.key")
 
   registry_id <- paste0(registry, "_Ids")
   registry_id_cols_to_remove <- c("ISRCTN_Ids", "NIHR_Ids", "EU_Ids", "NCT_Ids") |>
@@ -178,22 +178,22 @@ generate_pubmed_results_from_search_terms_and_update_db_one_registry <- function
       dplyr::select(-all_of(registry_id_cols_to_remove)) |>
       dplyr::distinct()
 
-    update_db(con, registry_db_pm_name, pm_tibble)
+    update_db(main_con, registry_db_pm_name, pm_tibble)
   }
 }
 
 # Wrapper function to update all pubmed tables
-update_all_pubmed_tables <- function(registries = c("NCT", "ISRCTN", "NIHR", "EU"), trial_id_df = Trial_IDs) {
-  purrr::walk(registries, generate_pubmed_results_from_search_terms_and_update_db_one_registry, trial_id_df = Trial_IDs, con = con)
+update_all_pubmed_tables <- function(registries = c("NCT", "ISRCTN", "NIHR", "EU"), trial_id_df, main_con) {
+  purrr::walk(registries, generate_pubmed_results_from_search_terms_and_update_db_one_registry, trial_id_df = trial_id_df, main_con = main_con)
 }
 
 # Function to update db for NCT registry changes
-update_db_for_NCT_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
-                                      Trial_IDs = DBI::dbReadTable(con, "Trial_IDs")) {
+update_db_for_NCT_changes <- function(main_con,
+                                      trial_id_df) {
   # Collapse Trial ID numbers into search term
-  half_NCT_Id_Vector <- round(length(concat_ids(Trial_IDs, "NCT_Ids")) / 2, 0)
-  NCT_Id_Vector1 <- concat_ids(Trial_IDs, "NCT_Ids")[1:half_NCT_Id_Vector] |> paste0(collapse = "%7C")
-  NCT_Id_Vector2 <- concat_ids(Trial_IDs, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(Trial_IDs, "NCT_Ids"))] |> paste0(collapse = "%7C")
+  half_NCT_Id_Vector <- round(length(concat_ids(trial_id_df, "NCT_Ids")) / 2, 0)
+  NCT_Id_Vector1 <- concat_ids(trial_id_df, "NCT_Ids")[1:half_NCT_Id_Vector] |> paste0(collapse = "%7C")
+  NCT_Id_Vector2 <- concat_ids(trial_id_df, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(trial_id_df, "NCT_Ids"))] |> paste0(collapse = "%7C")
 
   # Construct URLs
 
@@ -208,37 +208,37 @@ update_db_for_NCT_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite(
   NCT_DF2 <- generate_NCT_DF(NCT_URL2)
 
   NCT_DF <- dplyr::bind_rows(NCT_DF1, NCT_DF2) |>
-    dplyr::right_join(Trial_IDs[, c("Program", "Guideline.number", "URL", "NCT_Ids")],
+    dplyr::right_join(trial_id_df[, c("Program", "Guideline.number", "URL", "NCT_Ids")],
       by = c("NCTId" = "NCT_Ids"), multiple = "all"
     ) |>
     dplyr::filter(!is.na(NCTId)) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
     dplyr::select(Query_Date, Program, Guideline.number, URL, everything(), -Rank)
 
-  update_db(con, "NCT", NCT_DF)
+  update_db(main_con, "NCT", NCT_DF)
 }
 
 # Function to update db for ISRCTN registry changes
-update_db_for_ISRCTN_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
-                                         Trial_IDs = DBI::dbReadTable(con, "Trial_IDs")) {
+update_db_for_ISRCTN_changes <- function(main_con,
+                                         trial_id_df) {
   # Collapse trial ids into search terms
-  half_ISRCTN_Id_Vector <- round(length(concat_ids(Trial_IDs, "ISRCTN_Ids")) / 2, 0)
-  ISRCTN_Id_Vector1 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] |> paste0(collapse = "%20OR%20")
-  ISRCTN_Id_Vector2 <- concat_ids(Trial_IDs, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(Trial_IDs, "ISRCTN_Ids"))] |> paste0(collapse = "%20OR%20")
+  half_ISRCTN_Id_Vector <- round(length(concat_ids(trial_id_df, "ISRCTN_Ids")) / 2, 0)
+  ISRCTN_Id_Vector1 <- concat_ids(trial_id_df, "ISRCTN_Ids")[1:half_ISRCTN_Id_Vector] |> paste0(collapse = "%20OR%20")
+  ISRCTN_Id_Vector2 <- concat_ids(trial_id_df, "ISRCTN_Ids")[(half_ISRCTN_Id_Vector + 1):length(concat_ids(trial_id_df, "ISRCTN_Ids"))] |> paste0(collapse = "%20OR%20")
 
   # ISRCTN URLs done in two parts as v large
   ISRCTN_URL1 <- paste0(
     "http://www.isrctn.com/api/query/format/who?q=",
     ISRCTN_Id_Vector1,
     "&limit=",
-    length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
+    length(concat_ids(trial_id_df, "ISRCTN_Ids")) + 10
   )
 
   ISRCTN_URL2 <- paste0(
     "http://www.isrctn.com/api/query/format/who?q=",
     ISRCTN_Id_Vector2,
     "&limit=",
-    length(concat_ids(Trial_IDs, "ISRCTN_Ids")) + 10
+    length(concat_ids(trial_id_df, "ISRCTN_Ids")) + 10
   )
 
   # Create intermediate dfs
@@ -247,20 +247,20 @@ update_db_for_ISRCTN_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLi
 
   # Create final df
   ISRCTN_DF <- dplyr::bind_rows(ISRCTN_DF1, ISRCTN_DF2) |>
-    dplyr::right_join(Trial_IDs[, c("Program", "Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids"), multiple = "all") |>
+    dplyr::right_join(trial_id_df[, c("Program", "Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids"), multiple = "all") |>
     dplyr::filter(!is.na(ISRCTN_No)) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
     dplyr::select(Query_Date, Program, Guideline.number, URL, everything())
 
   # Update db
-  update_db(con, "ISRCTN", ISRCTN_DF)
+  update_db(main_con, "ISRCTN", ISRCTN_DF)
 }
 
 # Function to update db for NIHR registry changes
-update_db_for_NIHR_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
-                                       Trial_IDs = DBI::dbReadTable(con, "Trial_IDs")) {
+update_db_for_NIHR_changes <- function(main_con,
+                                       trial_id_df) {
   # Construct trial id vectors
-  NIHR_Id_Vector <- collapse_ids(Trial_IDs, "NIHR_Ids", "+OR+")
+  NIHR_Id_Vector <- collapse_ids(trial_id_df, "NIHR_Ids", "+OR+")
 
   # Construct URL
   NIHR_URL_API2 <-
@@ -268,7 +268,7 @@ update_db_for_NIHR_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite
 
   NIHR_json <- jsonlite::fromJSON(url(NIHR_URL_API2))
 
-  NIHR_Trial_IDs <- Trial_IDs |>
+  NIHR_Trial_IDs <- trial_id_df |>
     dplyr::select(Program, Guideline.number, URL, NIHR_Ids) |>
     tidyr::drop_na(NIHR_Ids) |>
     dplyr::mutate("projectjoin" = stringr::str_replace_all(NIHR_Ids, "[^\\d]", ""))
@@ -284,13 +284,13 @@ update_db_for_NIHR_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite
 }
 
 # Function to update db for EU registry changes
-update_db_for_EU_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
-                                     Trial_IDs = DBI::dbReadTable(con, "Trial_IDs")) {
+update_db_for_EU_changes <- function(main_con,
+                                     trial_id_df) {
   # set permissions for clinicaltrials.eu to work
   httr::set_config(httr::config(ssl_verifypeer = FALSE))
 
   # Create vector of EU Ids
-  EU_Vector <- collapse_ids(Trial_IDs, "EU_Ids", "+OR+")
+  EU_Vector <- collapse_ids(trial_id_df, "EU_Ids", "+OR+")
 
   # Generate API URL
   EU_URL <- paste0(
@@ -299,7 +299,7 @@ update_db_for_EU_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite()
   )
 
   # sqlite db
-  eu_temp_db <- nodbi::src_sqlite(dbname = "RSQLite_Data/EU_temp_db.sqlite", collection = "EU")
+  eu_temp_db <- nodbi::src_sqlite(dbname = "data/RSQLite_data/EU_temp_db.sqlite", collection = "EU")
 
   try(ctrdata::ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
@@ -318,7 +318,7 @@ update_db_for_EU_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite()
       con = eu_temp_db
     ) |>
     dplyr::mutate(EU_Ids = stringr::str_extract(`_id`, "^\\d{4}-\\d{6}-\\d{2}")) |>
-    dplyr::right_join(Trial_IDs, multiple = "all") |>
+    dplyr::right_join(trial_id_df, multiple = "all") |>
     dplyr::filter(!is.na(`_id`)) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
     dplyr::select(
@@ -331,21 +331,22 @@ update_db_for_EU_changes <- function(main_con = DBI::dbConnect(RSQLite::SQLite()
 
   update_db(main_con, "EU", EU_DF)
 }
+
 # Wrapper function for all update (no PM or Email)
-download_trial_info_wrapper_no_pm_or_email <- function(con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
-                                                       Trial_IDs = DBI::dbReadTable(con, "Trial_IDs")) {
+download_trial_info_wrapper_no_pm_or_email <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
+                                                       trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs")) {
   # Update dbs
-  update_db_for_NCT_changes()
-  update_db_for_ISRCTN_changes()
-  update_db_for_NIHR_changes()
-  update_db_for_EU_changes()
+  update_db_for_NCT_changes(main_con = main_con, trial_id_df = trial_id_df)
+  update_db_for_ISRCTN_changes(main_con = main_con, trial_id_df = trial_id_df)
+  update_db_for_NIHR_changes(main_con = main_con, trial_id_df = trial_id_df)
+  update_db_for_EU_changes(main_con = main_con, trial_id_df = trial_id_df)
 }
 
 # Wrapper function for all update
-download_trial_info_wrapper <- function(con = DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite"),
-                                        Trial_IDs = DBI::dbReadTable(con, "Trial_IDs"),
+download_trial_info_wrapper <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
+                                        trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs"),
                                         dev_flag) {
   download_trial_info_wrapper_no_pm_or_email()
-  update_all_pubmed_tables()
+  update_all_pubmed_tables(main_con = main_con, trial_id_df = trial_id_df)
   generate_email_alerts(dev_flag = dev_flag)
 }

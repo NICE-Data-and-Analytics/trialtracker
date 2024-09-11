@@ -1,22 +1,22 @@
-get_last_registry_entry_before_today <- function(registry, con) {
-  DBI::dbReadTable(con, registry) |>
+get_last_registry_entry_before_today <- function(registry,main_con) {
+  DBI::dbReadTable(main_con, registry) |>
     dplyr::filter(Query_Date != Sys.Date()) |>
     dplyr::pull(Query_Date) |>
     max() |>
     as.Date(origin = "1970-01-01")
 }
-pull_change <- function(registry_table, con, start_date, end_date, group_cols = NULL, exclude_cols = NULL, regex_pattern = ".") {
+pull_change <- function(registry_table, main_con, start_date, end_date, group_cols = NULL, exclude_cols = NULL, regex_pattern = ".") {
   if (length(start_date) == 0) {
-    df_old <- DBI::dbReadTable(con, registry_table)[0, ]
+    df_old <- DBI::dbReadTable(main_con, registry_table)[0, ]
   } else {
-    df_old <- DBI::dbReadTable(con, registry_table) |>
+    df_old <- DBI::dbReadTable(main_con, registry_table) |>
       dplyr::filter(
         Query_Date == start_date,
         stringr::str_detect(Guideline.number, regex_pattern)
       )
   }
 
-  df_new <- DBI::dbReadTable(con, registry_table) |>
+  df_new <- DBI::dbReadTable(main_con, registry_table) |>
     dplyr::filter(
       Query_Date == end_date,
       stringr::str_detect(Guideline.number, regex_pattern)
@@ -28,10 +28,11 @@ pull_change <- function(registry_table, con, start_date, end_date, group_cols = 
     group_col = group_cols,
     exclude = exclude_cols,
     stop_on_error = FALSE
-  )
+  ) |>
+    suppressWarnings()
 }
-generate_pubmed_df_for_email_attachment <- function(con, registry_table, start_date, end_date, regex_pattern = ".") {
-  DBI::dbReadTable(con = con, registry_table) |>
+generate_pubmed_df_for_email_attachment <- function(main_con, registry_table, start_date, end_date, regex_pattern = ".") {
+  DBI::dbReadTable(main_con, registry_table) |>
     dplyr::filter(
       Query_Date >= start_date & Query_Date <= end_date,
       stringr::str_detect(Guideline.number, regex_pattern)
@@ -70,8 +71,8 @@ write_pubmed_dfs_to_disk <- function(PM_DF, daily_path, PM_DF_Name) {
   }
 }
 generate_tt_email <- function(program, attachments, dev_flag) {
-  users <- c("niamh.knapton@nice.org.uk", "catherine.jacob@nice.org.uk")
-  devs <- c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk")
+  users <- readLines("secrets/users.csv")
+  devs <- readLines("secrets/devs.csv")
 
   email <- emayili::envelope() |>
     emayili::from("robert.willans@nice.org.uk")
@@ -139,26 +140,26 @@ generate_tt_email <- function(program, attachments, dev_flag) {
 # Functions with no unit tests
 
 # Function to create pubmed files
-generate_all_pubmed_dfs_for_all_programs_one_registry <- function(registry, prog_regexes, programs, con) {
+generate_all_pubmed_dfs_for_all_programs_one_registry <- function(registry, prog_regexes, programs, main_con) {
   purrr::walk2(
     .x = prog_regexes,
     .y = programs,
     ~ generate_pubmed_df_for_email_attachment(
       regex_pattern = .x,
-      con = con,
+      main_con = main_con,
       registry_table = paste0(registry, "_PM"),
-      start_date = get_last_registry_entry_before_today(paste0(registry, "_PM"), con) + 1,
+      start_date = get_last_registry_entry_before_today(paste0(registry, "_PM"), main_con) + 1,
       end_date = Sys.Date()
     ) |>
       write_pubmed_dfs_to_disk(daily_path = daily_path, PM_DF_Name = paste0(registry, "_", .y))
   )
 }
 # Function to pull_data_for_NIHR_comparison_data
-pull_nihr_change <- function(prog_regex, old_or_new, con) {
-  DBI::dbReadTable(con, "NIHR") |>
+pull_nihr_change <- function(prog_regex, old_or_new, main_con) {
+  DBI::dbReadTable(main_con, "NIHR") |>
     dplyr::filter(
       Query_Date == if (old_or_new == "old") {
-        get_last_registry_entry_before_today("NIHR", con)
+        get_last_registry_entry_before_today("NIHR", main_con)
       } else if (old_or_new == "new") {
         Sys.Date()
       },
@@ -166,35 +167,44 @@ pull_nihr_change <- function(prog_regex, old_or_new, con) {
     )
 }
 # Function to generate comparison dfs for given program
-generate_nihr_comparison_table <- function(program, program_regex, con) {
-  compareDF::compare_df(pull_nihr_change(prog_regex = program_regex, "new", con),
-    pull_nihr_change(prog_regex = program_regex, "old", con),
+generate_nihr_comparison_table <- function(program, program_regex, main_con, daily_path) {
+  compareDF::compare_df(pull_nihr_change(prog_regex = program_regex, "new", main_con),
+    pull_nihr_change(prog_regex = program_regex, "old", main_con),
     group_col = c("Guideline.number", "project_id"),
     exclude = c("Query_Date", "URL", "project_title"),
     stop_on_error = FALSE
   ) |>
+    suppressWarnings() |>
     write_changes_to_disk(daily_path = daily_path, DF_Name = "NIHR", prog_name = program)
 }
 # Function to generate all pubmed dfs
-generate_all_pubmed_dfs_for_all_programs_and_registries <- function(registry_tables, prog_regexes, programs) {
+generate_all_pubmed_dfs_for_all_programs_and_registries <- function(registry_tables, prog_regexes, programs, main_con) {
   # This maps over registries (outer loop) and programs (inner loop) to create pubmed changes files.
   # Inner loop is contained in anonymous function within within "generate_all_pubmed_dfs_for_all_programs_one_registry" function
   purrr::walk(registry_tables,
     generate_all_pubmed_dfs_for_all_programs_one_registry,
     prog_regexes = prog_regexes,
-    programs = programs
+    programs = programs,
+    main_con = main_con
   )
 }
 # Function to generate change files for one registry
-generate_change_files_for_all_programs_in_one_registry <- function(registry, con, group_cols, exclude_cols, prog_regexes, programs) {
+generate_change_files_for_all_programs_in_one_registry <- function(registry,
+                                                                   main_con,
+                                                                   group_cols,
+                                                                   exclude_cols,
+                                                                   prog_regexes,
+                                                                   programs,
+                                                                   daily_path) {
+
   purrr::walk2(
     .x = prog_regexes,
     .y = programs,
     ~ pull_change(
       registry_table = registry,
-      con = con,
+      main_con = main_con,
       regex_pattern = .x,
-      start_date = get_last_registry_entry_before_today(registry, con),
+      start_date = get_last_registry_entry_before_today(registry, main_con),
       end_date = Sys.Date(),
       group_cols = group_cols,
       exclude_cols = exclude_cols
@@ -219,7 +229,7 @@ load_attachments_and_send_email_alert_for_all_programs <- function(programs = pr
   )
 }
 # Function to generate change files for NCT, ISRCTN, and EU registries
-generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, registry_tables, con) {
+generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, registry_tables, main_con, daily_path) {
   # Generate lists to map over
   list(
     registry = as.list(registry_tables |> stringr::str_subset("NIHR", negate = TRUE)),
@@ -237,36 +247,39 @@ generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, regi
       )
     )
   ) |> # then pass to pwalk to generate the files
-    purrr::pwalk(generate_change_files_for_all_programs_in_one_registry, con = con, prog_regexes = prog_regexes, programs = programs)
+    purrr::pwalk(generate_change_files_for_all_programs_in_one_registry, main_con = main_con, prog_regexes = prog_regexes, programs = programs,
+                 daily_path = daily_path)
 }
 # Function to loop through programs generating NIHR change files
-generate_change_files_for_nihr <- function(prog_regexes, programs, con) {
+generate_change_files_for_nihr <- function(prog_regexes, programs, main_con, daily_path) {
   purrr::walk2(
     .x = programs,
     .y = prog_regexes,
     generate_nihr_comparison_table,
-    con = con
+    main_con = main_con,
+    daily_path = daily_path
   )
 }
 generate_email_alerts <- function(dev_flag) {
-  # Add path into config file or somesuch
+
+  # Add path into config file?
 
   # Create daily directory to store attachment files
-  daily_path <- paste0("Email_Attachments", "/", Sys.Date(), "/")
+  daily_path <- file.path("data", "email_attachments", Sys.Date(), "/")
   if (!dir.exists(daily_path)) {
     dir.create(daily_path)
   }
 
-  # Setup con
-  con <- DBI::dbConnect(RSQLite::SQLite(), "RSQLite_Data/TrialTracker-db.sqlite")
-
-  # setup smtp settings
+  # SMTP settings
   smtp <- emayili::server(
     host = "smtp.mandrillapp.com",
     port = 587,
     username = "nice",
     password = readr::read_file("Secrets/mandrill_pwd.txt")
   )
+
+  # Setup con
+  main_con <- DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite")
 
   # List of programs (& regex matches)
   programs <- c("COVID", "IP", "Other")
@@ -281,22 +294,27 @@ generate_email_alerts <- function(dev_flag) {
     prog_regexes = prog_regexes,
     programs = programs,
     registry_tables = registry_tables,
-    con = con
+    main_con = main_con,
+    daily_path = daily_path
   )
 
   # CREATE NIHR CHANGE FILES
 
-  generate_change_files_for_nihr(prog_regexes, programs, con)
+  generate_change_files_for_nihr(prog_regexes = prog_regexes,
+                                 programs = programs,
+                                 main_con = main_con,
+                                 daily_path = daily_path)
 
   # CREATE PUBMED CHANGE FILES
 
   generate_all_pubmed_dfs_for_all_programs_and_registries(
     registry_tables = registry_tables,
     prog_regexes = prog_regexes,
-    programs = programs
+    programs = programs,
+    main_con = main_con
   )
   # Close con
-  DBI::dbDisconnect(con)
+  DBI::dbDisconnect(main_con)
 
   # CREATE EMAILS, ATTACH FILES AND SEND EMAILS
 
