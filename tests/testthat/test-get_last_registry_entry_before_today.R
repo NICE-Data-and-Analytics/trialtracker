@@ -2,8 +2,6 @@ library(testthat)
 library(mockery)
 library(dplyr)
 
-source("R/Functions/email_alert_functions.R")
-
 # Mock function to replace dbReadTable
 mock_dbReadTable <- function(con, registry) {
   data.frame(Query_Date = as.Date(c("2023-09-01", "2023-09-02", "2023-09-03")))

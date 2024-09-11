@@ -3,8 +3,6 @@ library(dplyr)
 library(compareDF)
 library(mockery)
 
-source("R/Functions/email_alert_functions.R")
-
 # Unit test for pull_change function
 test_that("pull_change returns correct comparison", {
   # Mock the dbReadTable function

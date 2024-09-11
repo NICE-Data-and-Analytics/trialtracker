@@ -2,8 +2,6 @@ library(testthat)
 library(emayili)
 library(stringr)
 
-source("R/Functions/email_alert_functions.R")
-
 test_that("generate_tt_email works correctly", {
   # Setup test params
   program <- "COVID"

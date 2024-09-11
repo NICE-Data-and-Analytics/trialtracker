@@ -2,8 +2,6 @@ library(testthat)
 library(compareDF)
 library(mockery)
 
-source("R/Functions/email_alert_functions.R")
-
 # Mock data for testing
 Change_DF <- readRDS("tests/testthat/test_data/example_Compare_DF_obj.rds")
 DF_Name <- "NCT"

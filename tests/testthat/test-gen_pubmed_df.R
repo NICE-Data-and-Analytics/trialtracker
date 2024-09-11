@@ -3,8 +3,6 @@ library(dplyr)
 library(stringr)
 library(DBI)
 
-source("R/Functions/email_alert_functions.R")
-
 # Sample data for testing
 sample_data <- data.frame(
   Query_Date = as.Date(c("2023-01-01", "2023-02-01", "2023-02-01", "2023-02-01", "2023-03-05", "2023-05-01", "2023-06-01", "2023-05-05")),
