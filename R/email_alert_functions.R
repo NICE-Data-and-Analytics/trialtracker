@@ -275,7 +275,7 @@ generate_email_alerts <- function(dev_flag) {
     host = "smtp.mandrillapp.com",
     port = 587,
     username = "nice",
-    password = readr::read_file("Secrets/mandrill_pwd.txt")
+    password = readr::read_file("secrets/mandrill_pwd.txt")
   )
 
   # Setup con
