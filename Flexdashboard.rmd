@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 
-main_con <- DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_Data/TrialTracker-db.sqlite")
+main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("data", "RSQLite_Data", "TrialTracker-db.sqlite"))
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
 
 clean_UTF <- function(x) {
@@ -57,7 +57,7 @@ DBI::dbReadTable(main_con, "NCT") |>
     \(x) lubridate::as_date(lubridate::parse_date_time(x, c("ymd", "bdy"), truncated = 1L))
   )) |>
   dplyr::rename(
-    "Guideline" = Guideline.number,
+    Guideline = Guideline.number,
     `NCT ID` = NCTId,
     `Org Study ID` = OrgStudyId,
     Title = BriefTitle,
@@ -96,7 +96,7 @@ DBI::dbReadTable(main_con, "ISRCTN") |>
   ) |>
   dplyr::distinct() |>
   dplyr::rename(
-    "Guideline" = Guideline.number,
+    Guideline = Guideline.number,
     `ISRCTN ID` = ISRCTN_No,
     Title = Public_Title,
     `Scientific Title` = Scientific_Title,
@@ -116,7 +116,7 @@ NIHR_dates <- DBI::dbReadTable(main_con, "NIHR") |>
   dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = project_id)
 
 DBI::dbReadTable(main_con, "NIHR") |>
-  dplyr::mutate("project_id_filter" = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
+  dplyr::mutate(project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
   dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
   dplyr::select(-project_id_filter) |>
   dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
@@ -125,7 +125,7 @@ DBI::dbReadTable(main_con, "NIHR") |>
   dplyr::select(Program, Guideline.number, `Date Added`, everything()) |> # reorder
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
   dplyr::rename(
-    "Guideline" = Guideline.number,
+    Guideline = Guideline.number,
     `NIHR ID` = project_id,
     `Project Title` = project_title,
     Status = project_status,
@@ -144,7 +144,7 @@ EU_dates <- DBI::dbReadTable(main_con, "EU") |>
   dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = EU_Ids)
 
 DBI::dbReadTable(main_con, "EU") |>
-  dplyr::mutate("short_id" = stringr::str_sub(`X_id`, 1L, 14L)) |>
+  dplyr::mutate(short_id = stringr::str_sub(`X_id`, 1L, 14L)) |>
   dplyr::filter(short_id %in% trial_id_df$EU_Ids) |>
   dplyr::left_join(EU_dates) |>
   dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
@@ -155,7 +155,7 @@ DBI::dbReadTable(main_con, "EU") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
   dplyr::distinct() |>
   dplyr::rename(
-    "Guideline" = Guideline.number,
+    Guideline = Guideline.number,
     `Clinicaltrials.eu ID` = `X_id`,
     `End of Trial Status` = p_end_of_trial_status,
     Title = a3_full_title_of_the_trial,
@@ -232,9 +232,9 @@ compareDF::compare_df(new_df,
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
   dplyr::mutate(across(c(CompletionDate:LastUpdatePostDate), \(x) lubridate::as_date(lubridate::parse_date_time(x, c("ymd", "bdy"), truncated = 1L)))) |>
   dplyr::select(
-    `Change` = chng_type,
+    Change = chng_type,
     Program,
-    "Guideline" = Guideline.number,
+    Guideline = Guideline.number,
     URL = URL2,
     Acronym,
     Title,
@@ -361,8 +361,7 @@ compareDF::compare_df(
   stop_on_error = FALSE
 )$comparison_df |>
   dplyr::left_join(new_df) |>
-  dplyr::mutate( # `Query Date` = as.Date(Query_Date, origin = "1970-01-01"),
-    Title = stringr::str_trunc(a3_full_title_of_the_trial, 90L)
+  dplyr::mutate(Title = stringr::str_trunc(a3_full_title_of_the_trial, 90L)
   ) |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
   dplyr::select(

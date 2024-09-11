@@ -259,9 +259,6 @@ update_db_for_ISRCTN_changes <- function(main_con,
 # Function to update db for NIHR registry changes
 update_db_for_NIHR_changes <- function(main_con,
                                        trial_id_df) {
-  # Construct trial id vectors
-  NIHR_Id_Vector <- collapse_ids(trial_id_df, "NIHR_Ids", "+OR+")
-
   # Construct URL
   NIHR_URL_API2 <-
     "https://nihr.opendatasoft.com/api/v2/catalog/datasets/infonihr-open-dataset/exports/json?limit=-1&offset=0&lang=en&timezone=UTC"

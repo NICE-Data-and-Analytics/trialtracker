@@ -11,7 +11,7 @@ add_program_col_to_sql_table <- function(table, main_con) {
   DBI::dbWriteTable(main_con, name = table, value = tibble, overwrite = TRUE)
 }
 
-write_prog_col_to_df <- function(sql_table) {
+write_prog_col_to_df <- function(sql_table, main_con) {
   df <- DBI::dbReadTable(main_con, sql_table)
 
   df <- df |>
