@@ -150,7 +150,7 @@ generate_NCT_URL <- function(NCT_ID_Vec) {
 #' @import purrr
 #' @import jsonlite
 #' @import tibble
-#' @import janitor
+#' @import stringr
 #' @export
 #' @examples
 #' \dontrun{
@@ -158,71 +158,71 @@ generate_NCT_URL <- function(NCT_ID_Vec) {
 #' df <- generate_NCT_DF(api_url)
 #' print(df)
 #' }
-
 generate_NCT_DF <- function(url) {
 
   df_resp <- url |>
     jsonlite::read_json()
 
-  # Check if resultsFirstPostDateStruct exists within protocolSection$statusModule and create an empty column if it doesn't
-  df_resp$studies <- df_resp$studies |>
-    purrr::map(\(x) {
-      if (!"resultsFirstPostDateStruct" %in% names(x$protocolSection$statusModule)) {
-        x$protocolSection$statusModule$resultsFirstPostDateStruct <- list(date = "")
-      }
-      x
-    })
+  studies <- df_resp$studies
 
-  # Check if referencesModule exists and is a list, otherwise create an empty list
-  # df_resp$studies <- df_resp$studies |>
-  #   purrr::map(\(x) {
-  #     if (!"referencesModule" %in% names(x$protocolSection) || !is.list(x$protocolSection$referencesModule)) {
-  #       x$protocolSection$referencesModule <- list(SeeAlsoLinkURL = "")
-  #     }
-  #     # Ensure SeeAlsoLinkURL exists within referencesModule
-  #     if (!"SeeAlsoLinkURL" %in% names(x$protocolSection$referencesModule)) {
-  #       x$protocolSection$referencesModule$SeeAlsoLinkURL <- NULL
-  #     }
-  #     x
-  #   })
+  ncts <- purrr::map_chr(studies,
+                         \(x) purrr::pluck(x, "protocolSection", "identificationModule", "nctId", .default = NA)
+                         )
+  orgstudyid <- purrr::map_chr(studies,
+                               \(x) purrr::pluck(x, "protocolSection", "identificationModule", "orgStudyIdInfo", "id",
+                                                 .default = NA))
+  conditions <- purrr::map_chr(studies,
+                               \(x) purrr::pluck(x, "protocolSection", "conditionsModule", "conditions") |>
+                                 stringr::str_c(collapse = "|")
+  )
+  briefTitles <- purrr::map_chr(studies,
+                                \(x) purrr::pluck(x, "protocolSection", "identificationModule", "briefTitle", .default = NA))
+  acronyms <- purrr::map_chr(studies,
+                             \(x) purrr::pluck(x, "protocolSection", "identificationModule", "acronym", .default = NA))
+  overallstatuses <- purrr::map_chr(studies,
+                                    \(x) purrr::pluck(x, "protocolSection", "statusModule", "overallStatus", .default = NA) |>
+                                      stringr::str_replace_all("_", " ") |>
+                                      stringr::str_to_sentence() |>
+                                      stringr::str_replace("Active not recruiting", "Active, not recruiting") |>
+                                      stringr::str_replace("Unknown", "Unknown status")
+  )
+  primarycompletiondates <- purrr::map_chr(studies,
+                                           \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                             "primaryCompletionDateStruct", "date", .default = NA))
+  completiondates <- purrr::map_chr(studies,
+                                    \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                      "completionDateStruct", "date", .default = NA))
+  resultsfirstsubmitdates <- purrr::map_chr(studies,
+                                            \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                              "resultsFirstSubmitDate", .default = NA))
+  resultsfirstpostdates <- purrr::map_chr(studies,
+                                          \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                            "resultsFirstPostDateStruct", "date", .default = NA))
+  lastupdatepostdates <- purrr::map_chr(studies,
+                                        \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                          "lastUpdatePostDateStruct", "date", .default = NA))
 
-  df <- df_resp$studies |>
-    tibble::tibble() |>
-    tidyr::unnest_longer(1) |>
-    tidyr::unnest_wider(1) |>
-    tidyr::unnest_wider(c(identificationModule,
-                          statusModule,
-                          conditionsModule)) |>
-    tidyr::unnest_wider(orgStudyIdInfo) |>
-    tidyr::hoist(primaryCompletionDateStruct, PrimaryCompletionDate = "date") |>
-    tidyr::hoist(completionDateStruct, CompletionDate = "date") |>
-    tidyr::hoist(resultsFirstPostDateStruct, ResultsFirstPostDate = "date") |>
-    tidyr::hoist(lastUpdatePostDateStruct, LastUpdatePostDate = "date") |>
-    tidyr::hoist(referencesModule, seeAlsoLinks = "seeAlsoLinks") |>
-    #tidyr::unnest_wider(referencesModule) |>
-    tidyr::unnest(seeAlsoLinks) |>
-    dplyr::rowwise() |>
-    dplyr::mutate(
-      Condition = stringr::str_c(unlist(conditions), collapse = "|"),
-      SeeAlsoLinks = stringr::str_c(unlist(seeAlsoLinks), collapse = "|"),
-      OverallStatus = stringr::str_replace(stringr::str_to_sentence(stringr::str_replace_all(overallStatus, "_", " ")),
-                                           "Active not recruiting", "Active, not recruiting") |>
-        stringr::str_replace("Unknown", "Unknown status"),
-      .keep = "unused"
-    ) |>
-    dplyr::arrange(desc(nctId)) |>
-    dplyr::select(-`df_resp$studies_id`) |>
-    dplyr::mutate(Rank = dplyr::row_number(), .before = 1) |>
-    janitor::clean_names("big_camel") |>
-    dplyr::rename(
-      NCTId = NctId,
-      OrgStudyId = Id,
-      SeeAlsoLinkURL = SeeAlsoLinks
-    ) |>
-    dplyr::select(Rank, NCTId, OrgStudyId, Condition, BriefTitle, Acronym, OverallStatus, everything()) |>
-    dplyr::relocate(LastUpdatePostDate, .before = SeeAlsoLinkURL)
+  seealsolinks <- purrr::map_chr(studies,
+                                 \(x) purrr::pluck(x, "protocolSection", "referencesModule", "seeAlsoLinks", 1, "url",
+                                                   .default = NA) |> stringr::str_c(collapse = "|"))
+
+  df <- tibble::tibble("NCTId" = ncts,
+                       "OrgStudyId" = orgstudyid,
+                       "Condition" = conditions,
+                       "BriefTitle" = briefTitles,
+                       "Acronym" = acronyms,
+                       "OverallStatus" = overallstatuses,
+                       "PrimaryCompletionDate" = primarycompletiondates,
+                       "CompletionDate" = completiondates,
+                       "ResultsFirstSubmitDate" = resultsfirstsubmitdates,
+                       "ResultsFirstPostDate" = resultsfirstpostdates,
+                       "LastUpdatePostDate" = lastupdatepostdates,
+                       "SeeAlsoLinkURL" = seealsolinks) |>
+    dplyr::arrange(desc(NCTId)) |>
+    dplyr::mutate(Rank = dplyr::row_number(), .before = 1)
 
   return(df)
+
 }
 #' Generate ISRCTN API URL
 #'
