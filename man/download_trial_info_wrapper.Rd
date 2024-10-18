@@ -16,7 +16,7 @@ download_trial_info_wrapper(
 
 \item{trial_id_df}{A dataframe containing trial IDs. Defaults to reading from the Trial_IDs table in the database.}
 
-\item{dev_flag}{A development flag toggling whether emails go to dev team only or users and dev team.}
+\item{dev_flag}{A development flag (logical TRUE / FALSE) toggling whether emails go to dev team only (TRUE) or dashboard users and dev team (FALSE).}
 }
 \value{
 None. The function updates the database for all registries, updates PubMed tables, and sends email alerts.
