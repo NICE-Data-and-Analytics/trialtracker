@@ -6,7 +6,7 @@ This is the code for the internal TrialTracker dashboard used by IS to monitor t
 
 To generate the *directory structure*, download or clone the repo via the usual method. You may have to recreate / copy the secrets folder (api keys and passwords) and the data folder (SQLite databases and email attachments).
 
-To install the *package* and provide the functions install from the repo via `install.packages("NICE-Data-and-Analytics/trialtracker")`. Load the package in via the usual `library(trialtracker)` or similar function call.
+To install the *package* and provide the functions install from the repo via `remotes::install.github("NICE-Data-and-Analytics/trialtracker")`. Load the package in via the usual `library(trialtracker)` or similar function call.
 
 ## Folder Structure
 
