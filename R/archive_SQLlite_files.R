@@ -2,15 +2,17 @@
 #'
 #' This function creates a monthly backup of the SQLite database files. It ensures that a directory for storing monthly backups exists, creates a subdirectory for the current month, and copies the SQLite files to this subdirectory.
 #'
+#' @param backup_subdirectory_path A character string specifying the path to the directory where monthly backups will be stored. Defaults to "data/monthly_SQLite_backup".
 #' @return None. The function is called for its side effects.
 #' @examples
 #' backup_SQLite_db()
+#' backup_SQLite_db("custom/path/to/backup")
 #' @export
-backup_SQLite_db <- function() {
+backup_SQLite_db <- function(backup_subdirectory_path = "data/monthly_SQLite_backup") {
   # Create a directory to store monthly SQLite backups
   # if it doesn't already exist
-  if (!dir.exists("data/monthly_SQLite_backup")) {
-    dir.create("data/Monthly_SQLite_backup", recursive = TRUE)
+  if (!dir.exists(backup_subdirectory_path)) {
+    dir.create(backup_subdirectory_path, recursive = TRUE)
   }
 
   # Set the current monthly path
