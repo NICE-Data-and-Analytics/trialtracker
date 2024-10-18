@@ -153,7 +153,6 @@ DBI::dbReadTable(main_con, "EU") |>
   ) |>
   dplyr::select(Program, Guideline.number, `Date Added`, everything()) |> # reorder
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
-  dplyr::distinct() |>
   dplyr::rename(
     Guideline = Guideline.number,
     `Clinicaltrials.eu ID` = `X_id`,
