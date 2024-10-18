@@ -17,11 +17,12 @@ backup_SQLite_db <- function(backup_subdirectory_path = "data/monthly_SQLite_bac
 
   # Set the current monthly path
   monthly_path <- file.path(backup_subdirectory_path,
-                            stringr::str_sub(as.character(Sys.Date()), 1, 7)
-  )
+                            stringr::str_sub(as.character(Sys.Date()), 1, 7))
+  message("Monthly path: ", monthly_path)
 
   # Create a directory to store this month's SQLite backup if it doesn't already exist
   if (!dir.exists(monthly_path)) {
+    message("Creating monthly backup directory: ", monthly_path)
     dir.create(monthly_path)
   }
 
