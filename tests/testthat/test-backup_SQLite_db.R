@@ -5,10 +5,12 @@ library(withr)
 # Define the test
 test_that("backup_SQLite_db creates the correct directories and copies files", {
   # Create a temporary directory to act as the data directory
-  temp_data_dir <- local_tempdir()
+  temp_data_dir <- normalizePath(local_tempdir(), winslash = "/", mustWork = FALSE)
+  defer(unlink(temp_data_dir, recursive = TRUE))
+  message("Temporary data directory: ", temp_data_dir)
 
   # Create a mock RSQLite_Data directory with some dummy files
-  rsqlite_data_dir <- file.path(temp_data_dir, "RSQLite_data")
+  rsqlite_data_dir <- file.path(temp_data_dir, "data/RSQLite_data")
   dir.create(rsqlite_data_dir, recursive = TRUE)
   file.create(file.path(rsqlite_data_dir, "dummy1.sqlite"))
   file.create(file.path(rsqlite_data_dir, "dummy2.sqlite"))
@@ -20,7 +22,9 @@ test_that("backup_SQLite_db creates the correct directories and copies files", {
   backup_SQLite_db()
 
   # Set the expected monthly backup directory path
-  monthly_backup_dir <- file.path(temp_data_dir, "monthly_SQLite_backup", stringr::str_sub(as.character(Sys.Date()), 1, 7))
+  monthly_backup_dir <- file.path(temp_data_dir, "data/monthly_SQLite_backup", stringr::str_sub(as.character(Sys.Date()), 1, 7))
+  monthly_backup_dir <- normalizePath(monthly_backup_dir, winslash = "/", mustWork = FALSE)
+  message("Expected monthly backup directory: ", monthly_backup_dir)
 
   # Check if the monthly backup directory was created
   expect_true(dir.exists(monthly_backup_dir), info = paste("Directory does not exist:", monthly_backup_dir))
@@ -35,10 +39,12 @@ test_that("backup_SQLite_db creates the correct directories and copies files", {
 # Define the test for custom backup path
 test_that("backup_SQLite_db creates the correct directories and copies files with custom path", {
   # Create a temporary directory to act as the data directory
-  temp_data_dir <- local_tempdir()
+  temp_data_dir <- normalizePath(local_tempdir(), winslash = "/", mustWork = FALSE)
+  defer(unlink(temp_data_dir, recursive = TRUE))
+  message("Temporary data directory: ", temp_data_dir)
 
   # Create a mock RSQLite_Data directory with some dummy files
-  rsqlite_data_dir <- file.path(temp_data_dir, "RSQLite_data")
+  rsqlite_data_dir <- file.path(temp_data_dir, "data/RSQLite_data")
   dir.create(rsqlite_data_dir, recursive = TRUE)
   file.create(file.path(rsqlite_data_dir, "dummy1.sqlite"))
   file.create(file.path(rsqlite_data_dir, "dummy2.sqlite"))
@@ -48,12 +54,16 @@ test_that("backup_SQLite_db creates the correct directories and copies files wit
 
   # Define a custom backup path
   custom_backup_path <- file.path(temp_data_dir, "custom_backup")
+  custom_backup_path <- normalizePath(custom_backup_path, winslash = "/", mustWork = FALSE)
+  message("Custom backup path: ", custom_backup_path)
 
   # Call the function with custom path
   backup_SQLite_db(custom_backup_path)
 
   # Set the expected custom backup directory path
   monthly_backup_dir <- file.path(custom_backup_path, stringr::str_sub(as.character(Sys.Date()), 1, 7))
+  monthly_backup_dir <- normalizePath(monthly_backup_dir, winslash = "/", mustWork = FALSE)
+  message("Expected custom monthly backup directory: ", monthly_backup_dir)
 
   # Check if the custom backup directory was created
   expect_true(dir.exists(monthly_backup_dir), info = paste("Directory does not exist:", monthly_backup_dir))
