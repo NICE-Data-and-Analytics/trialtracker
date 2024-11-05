@@ -99,14 +99,16 @@ write_changes_to_disk <- function(Change_DF, daily_path, DF_Name, prog_name = ""
   if (nrow(Change_DF$comparison_df) > 0) {
     compareDF::create_output_table(Change_DF,
                                    output_type = "xlsx",
-                                   file_name = paste0(
+                                   file_name = file.path(
                                      daily_path,
-                                     DF_Name,
-                                     "_",
-                                     prog_name,
-                                     "_Registry_Changes-",
-                                     Sys.Date(),
-                                     ".xlsx"
+                                     paste0(
+                                       DF_Name,
+                                       "_",
+                                       prog_name,
+                                       "_Registry_Changes-",
+                                       Sys.Date(),
+                                       ".xlsx"
+                                     )
                                    )
     )
   }
@@ -124,16 +126,10 @@ write_changes_to_disk <- function(Change_DF, daily_path, DF_Name, prog_name = ""
 #' @export
 write_pubmed_dfs_to_disk <- function(PM_DF, daily_path, PM_DF_Name) {
   if (nrow(PM_DF) > 0) {
-    readr::write_csv(
-      PM_DF,
-      paste0(
-        daily_path,
-        PM_DF_Name,
-        "_Publications_",
-        Sys.Date(),
-        ".csv"
-      )
-    )
+    readr::write_csv(PM_DF, file.path(
+      daily_path,
+      paste0(PM_DF_Name, "_Publications_", Sys.Date(), ".csv")
+    ))
   }
 }
 

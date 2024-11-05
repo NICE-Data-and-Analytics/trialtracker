@@ -46,15 +46,15 @@ test_that("pull_change returns correct comparison", {
   )
 
   # Mock the database connection
-  con <- NULL
+  con <- mock()
 
   # Replace dbReadTable with the mock
-  stub(pull_change, "dbReadTable", mock_dbReadTable)
+  stub(pull_change, "DBI::dbReadTable", mock_dbReadTable)
 
   # Call the function
   result <- pull_change(
     registry_table = "NCT",
-    con = con,
+    main_con = con,
     start_date = as.Date("2023-01-01"),
     end_date = as.Date("2023-01-02"),
     group_cols = "Guideline.number",

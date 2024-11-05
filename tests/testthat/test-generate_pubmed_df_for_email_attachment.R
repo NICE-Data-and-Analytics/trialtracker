@@ -15,8 +15,8 @@ con <- dbConnect(RSQLite::SQLite(), ":memory:")
 dbWriteTable(con, "registry_table", sample_data)
 
 # Unit test
-test_that("return_pubmed_df works correctly", {
-  result <- return_pubmed_df(con, "registry_table", as.Date("2023-01-01"), as.Date("2023-03-01"), "GL")
+test_that("generate_pubmed_df_for_email_attachment works correctly", {
+  result <- generate_pubmed_df_for_email_attachment(con, "registry_table", as.Date("2023-01-01"), as.Date("2023-03-01"), "GL")
 
   # Check the structure of the result
   expect_s3_class(result, "data.frame")
