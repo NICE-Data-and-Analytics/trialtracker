@@ -4,21 +4,22 @@ library(stringr)
 
 test_that("generate_tt_email works correctly", {
   # Setup test params
+  proj_root <- rprojroot::find_root(rprojroot::is_r_package)
+  setwd(proj_root)
   program <- "COVID"
   attachments <- dir("tests/testthat/test_data", full.names = TRUE) |> stringr::str_subset("_COVID_")
-  dev_flag <- TRUE
 
-  # Create email
-  email <- generate_tt_email(program, attachments, dev_flag)
+  # Create email (dev version)
+  email <- generate_tt_email(program, attachments, dev_flag = TRUE)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, "robert.willans@nice.org.uk")
+  expect_equal(email$headers$To$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
 
   # Check the 'Cc' field
-  expect_equal(email$headers$Cc$values$email, "jonathan.wray@nice.org.uk")
+  expect_equal(email$headers$Cc$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
 
   # Check the 'subject' field
   expect_equal(as.character(email$headers$Subject$values), "Trial Tracking Changes - COVID - DEV VERSION")
@@ -30,7 +31,7 @@ test_that("generate_tt_email works correctly", {
 
   # Test without attachments (dev version)
   attachments <- NULL
-  email <- generate_tt_email(program, attachments, dev_flag)
+  email <- generate_tt_email(program, attachments, dev_flag = TRUE)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
@@ -48,9 +49,8 @@ test_that("generate_tt_email works correctly", {
   expect_equal(length(email$parts) - 1, 0)
 
   # Now Test live version
-  dev_flag <- FALSE
   attachments <- dir("tests/testthat/test_data", full.names = TRUE) |> stringr::str_subset("_COVID_")
-  email <- generate_tt_email(program, attachments, dev_flag)
+  email <- generate_tt_email(program, attachments, dev_flag = FALSE)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
@@ -71,7 +71,7 @@ test_that("generate_tt_email works correctly", {
 
   # Check case of no attachments (live version)
   attachments <- NULL
-  email <- generate_tt_email(program, attachments, dev_flag)
+  email <- generate_tt_email(program, attachments, dev_flag = FALSE)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")

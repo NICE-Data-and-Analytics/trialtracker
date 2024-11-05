@@ -10,7 +10,7 @@
 #' @export
 get_last_registry_entry_before_today <- function(registry, main_con) {
   DBI::dbReadTable(main_con, registry) |>
-    dplyr::filter(Query_Date != Sys.Date()) |>
+    dplyr::filter(Query_Date < Sys.Date()) |>
     dplyr::pull(Query_Date) |>
     max() |>
     as.Date(origin = "1970-01-01")

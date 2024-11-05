@@ -450,14 +450,11 @@ update_db_for_NIHR_changes <- function(main_con,
 #' @param trial_id_df A dataframe containing trial IDs.
 #' @return None. The function updates the EU registry data in the database.
 #' @import dplyr
-#' @import httr
+#' @import httr2
 #' @import ctrdata
 #' @export
 update_db_for_EU_changes <- function(main_con,
                                      trial_id_df) {
-  # set permissions for clinicaltrials.eu to work
-  httr::set_config(httr::config(ssl_verifypeer = FALSE))
-
   # Create vector of EU Ids
   EU_Vector <- collapse_ids(trial_id_df, "EU_Ids", "+OR+")
 
@@ -466,6 +463,18 @@ update_db_for_EU_changes <- function(main_con,
     "https://www.clinicaltrialsregister.eu/ctr-search/search?query=",
     EU_Vector
   )
+
+  # Create a request object
+  req <- httr2::request(EU_URL) %>%
+    httr2::req_options(ssl_verifypeer = FALSE)
+
+  # Perform the request
+  res <- httr2::req_perform(req)
+
+  # Check for successful response
+  if (httr2::resp_status(res) != 200) {
+    stop("Failed to fetch data from EU registry")
+  }
 
   # sqlite db
   eu_temp_db <- nodbi::src_sqlite(dbname = "data/RSQLite_data/EU_temp_db.sqlite", collection = "EU")
