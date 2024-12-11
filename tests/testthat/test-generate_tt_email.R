@@ -16,10 +16,12 @@ test_that("generate_tt_email works correctly", {
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
+  expect_equal(email$headers$To$values$email,
+               readLines("secrets/devs.csv")
+               )
 
   # Check the 'Cc' field
-  expect_equal(email$headers$Cc$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
+  expect_equal(email$headers$Cc$values$email, readLines("secrets/devs.csv"))
 
   # Check the 'subject' field
   expect_equal(as.character(email$headers$Subject$values), "Trial Tracking Changes - COVID - DEV VERSION")
@@ -37,7 +39,7 @@ test_that("generate_tt_email works correctly", {
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
+  expect_equal(email$headers$To$values$email, readLines("secrets/devs.csv"))
 
   # Check the 'Cc' field
   expect_null(email$headers$Cc$values$email)
@@ -56,10 +58,10 @@ test_that("generate_tt_email works correctly", {
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, c("niamh.knapton@nice.org.uk", "catherine.jacob@nice.org.uk"))
+  expect_equal(email$headers$To$values$email, readLines("secrets/users.csv"))
 
   # Check the 'Cc' field
-  expect_equal(email$headers$Cc$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
+  expect_equal(email$headers$Cc$values$email, readLines("secrets/devs.csv"))
 
   # Check the 'subject' field
   expect_equal(as.character(email$headers$Subject$values), "Trial Tracking Changes - COVID")
@@ -77,7 +79,7 @@ test_that("generate_tt_email works correctly", {
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, c("robert.willans@nice.org.uk", "jonathan.wray@nice.org.uk"))
+  expect_equal(email$headers$To$values$email, readLines("secrets/devs.csv"))
 
   # Check the 'Cc' field
   expect_null(email$headers$Cc$values$email)

@@ -207,8 +207,6 @@ generate_tt_email <- function(program, attachments, dev_flag) {
   }
 }
 
-# Functions with no unit tests
-
 #' Generate All PubMed Dataframes for All Programs in One Registry
 #'
 #' This function generates PubMed dataframes for all programs in a specified registry.
@@ -390,6 +388,11 @@ load_attachments_and_send_email_alert_for_all_programs <- function(programs = pr
 #' @import purrr
 #' @export
 generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, registry_tables, main_con, daily_path) {
+  if (length(registry_tables) == 0) {
+    message("No registry tables provided.")
+    return(NULL)
+  }
+
   list(
     registry = as.list(registry_tables |> stringr::str_subset("NIHR", negate = TRUE)),
     group_cols = list(
@@ -409,6 +412,7 @@ generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, regi
     purrr::pwalk(generate_change_files_for_all_programs_in_one_registry, main_con = main_con, prog_regexes = prog_regexes, programs = programs,
                  daily_path = daily_path)
 }
+
 
 #' Generate Change Files for NIHR
 #'
@@ -436,18 +440,21 @@ generate_change_files_for_nihr <- function(prog_regexes, programs, main_con, dai
 #' This function generates email alerts with attachments for trial tracking changes.
 #'
 #' @param dev_flag A logical flag indicating if the email is for development purposes.
+#' @param base_path A character string specifying the base path for the daily directory.
 #' @return None. The function generates and sends email alerts.
 #' @import emayili
 #' @import readr
 #' @import DBI
 #' @import RSQLite
 #' @export
-generate_email_alerts <- function(dev_flag) {
+generate_email_alerts <- function(dev_flag, base_path = "data/email_attachments") {
 
   # Create daily directory to store attachment files
-  daily_path <- file.path("data", "email_attachments", Sys.Date(), "/")
+  daily_path <- file.path(base_path, Sys.Date(), "/")
+  message("Attempting to create directory: ", daily_path)
   if (!dir.exists(daily_path)) {
-    dir.create(daily_path)
+    success <- dir.create(daily_path, recursive = TRUE)
+    message("Directory creation success: ", success)
   }
 
   # SMTP settings

@@ -4,10 +4,12 @@
 \alias{generate_email_alerts}
 \title{Generate Email Alerts}
 \usage{
-generate_email_alerts(dev_flag)
+generate_email_alerts(dev_flag, base_path = "data/email_attachments")
 }
 \arguments{
 \item{dev_flag}{A logical flag indicating if the email is for development purposes.}
+
+\item{base_path}{A character string specifying the base path for the daily directory.}
 }
 \value{
 None. The function generates and sends email alerts.

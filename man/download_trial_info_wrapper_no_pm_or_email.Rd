@@ -7,13 +7,19 @@
 download_trial_info_wrapper_no_pm_or_email(
   main_con = DBI::dbConnect(RSQLite::SQLite(),
     "data/RSQLite_data/TrialTracker-db.sqlite"),
-  trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs")
+  trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs"),
+  db_connect_func = DBI::dbConnect,
+  db_read_func = DBI::dbReadTable
 )
 }
 \arguments{
 \item{main_con}{A database connection object. Defaults to a connection to the TrialTracker SQLite database.}
 
 \item{trial_id_df}{A dataframe containing trial IDs. Defaults to reading from the Trial_IDs table in the database.}
+
+\item{db_connect_func}{A function for establishing a database connection (default: \code{DBI::dbConnect}).}
+
+\item{db_read_func}{A function for reading a table from the database (default: \code{DBI::dbReadTable}).}
 }
 \value{
 None. The function updates the database for all registries.

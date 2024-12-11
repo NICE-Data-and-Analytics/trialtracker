@@ -131,10 +131,13 @@ get_efetch_results_in_tibble_form <- function(pmid, api_object, search_term) {
 #' @import dplyr
 #' @export
 generate_pm_tibble_from_search_term <- function(search_term, api_object, mindate = Sys.Date() - 1, maxdate = Sys.Date() - 1) {
+
   id_results <- get_esearch_results(search_term, api_object = api_object, mindate = mindate, maxdate = maxdate)
   id_list <- id_results$esearchresult$idlist |> unlist()
+  result <- purrr::map(id_list, get_efetch_results_in_tibble_form, api_object = api_object, search_term = search_term) |> dplyr::bind_rows()
 
-  purrr::map(id_list, get_efetch_results_in_tibble_form, api_object = api_object, search_term = search_term) |> dplyr::bind_rows()
+  return(result)
+
 }
 
 #' Generate PubMed Tibble from Search Term Series

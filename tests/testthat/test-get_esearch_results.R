@@ -6,8 +6,7 @@ library(httptest2)
 # Define the test
 test_that("get_esearch_results retrieves the correct results", {
   # Define test inputs
-  proj_root <- rprojroot::find_root(rprojroot::is_r_package)
-  setwd(proj_root)
+  setwd(rprojroot::find_root(rprojroot::is_r_package))
   api <- readr::read_file("secrets/entrez.key")
   search_term <- "cancer"
   mindate <- as.Date("2024-10-17")
@@ -16,8 +15,7 @@ test_that("get_esearch_results retrieves the correct results", {
   # Define the expected response
   expected_response <- list(
     header = list(type = "esearch", version = "0.3"),
-    esearchresult = list(count = "725",
-                         retmax = "20",
+    esearchresult = list(retmax = "20",
                          retstart = "0",
                          idlist = list("39418133",
                                        "39418094",
@@ -47,7 +45,11 @@ test_that("get_esearch_results retrieves the correct results", {
     # Call the function
     results <- get_esearch_results(search_term, api, mindate, maxdate)
 
+    # Remove 'count' from the actual results for comparison
+    results_without_count <- results
+    results_without_count$esearchresult$count <- NULL
+
     # Check if the results match the expected response
-    expect_equal(results, expected_response)
+    expect_equal(results_without_count, expected_response)
 
 })

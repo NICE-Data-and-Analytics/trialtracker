@@ -11,6 +11,11 @@
 #' df <- data.frame(id = c("NCT1234567", "NCT987654321", NA, "NCT1234567"))
 #' concat_ids(df, "id")
 concat_ids <- function(df, id_col) {
+
+  if (!id_col %in% colnames(df)) {
+    stop(paste("Column", id_col, "not found in dataframe"))
+  }
+
   df <- df |>
     dplyr::select(tidyselect::all_of(id_col)) |>
     tidyr::drop_na()
@@ -61,10 +66,15 @@ collapse_ids <- function(df, id_col, paste_collapse) {
 create_search_list <- function(trial_id_df, registry) {
   id_vector <- paste0(registry, "_Ids")
 
+  if (!id_vector %in% colnames(trial_id_df)) {
+    stop(paste("Column", id_vector, "not found in dataframe"))
+  }
+
   trial_id_df |>
     dplyr::select(all_of(id_vector)) |>
     dplyr::distinct() |>
     tidyr::drop_na() |>
+    dplyr::filter(dplyr::if_any(.cols = everything(), .fns = ~ (. != ""))) |>
     dplyr::pull()
 }
 
@@ -173,7 +183,8 @@ generate_NCT_DF <- function(url) {
                                                  .default = NA))
   conditions <- purrr::map_chr(studies,
                                \(x) purrr::pluck(x, "protocolSection", "conditionsModule", "conditions") |>
-                                 stringr::str_c(collapse = "|")
+                                 stringr::str_c(collapse = "|") |>
+                                 dplyr::na_if("")
   )
   briefTitles <- purrr::map_chr(studies,
                                 \(x) purrr::pluck(x, "protocolSection", "identificationModule", "briefTitle", .default = NA))
@@ -234,6 +245,11 @@ generate_NCT_DF <- function(url) {
 #' generate_ISRCTN_URL(c("ISRCTN10985036", "ISRCTN25778550"))
 #' @export
 generate_ISRCTN_URL <- function(ISRCTN_Id_Vector) {
+
+  if (length(ISRCTN_Id_Vector) == 0) {
+    stop("The input vector is empty. Please provide at least one ISRCTN trial ID.")
+  }
+
   paste0(
     "http://www.isrctn.com/api/query/format/who?q=",
     paste0(ISRCTN_Id_Vector, collapse = "%20OR%20"),
@@ -256,6 +272,7 @@ generate_ISRCTN_URL <- function(ISRCTN_Id_Vector) {
 #' ISRCTN_URL <- "https://www.isrctn.com/api/query/format/who?q=ISRCTN27106947%20OR%20ISRCTN16033549%20OR%20ISRCTN17573805%20OR%20ISRCTN73327972%20OR%20ISRCTN32309003&limit=15"
 #' df <- generate_ISRCTN_df(ISRCTN_URL)
 generate_ISRCTN_df <- function(ISRCTN_URL) {
+
   ISRCTN_XML <- httr2::request(ISRCTN_URL) |>
     httr2::req_perform() |>
     httr2::resp_body_xml()
@@ -347,6 +364,7 @@ update_all_pubmed_tables <- function(registries = c("NCT", "ISRCTN", "NIHR", "EU
 update_db_for_NCT_changes <- function(main_con,
                                       trial_id_df) {
   # Collapse Trial ID numbers into search term
+  #print(trial_id_df)
   half_NCT_Id_Vector <- round(length(concat_ids(trial_id_df, "NCT_Ids")) / 2, 0)
   NCT_Id_Vector1 <- concat_ids(trial_id_df, "NCT_Ids")[1:half_NCT_Id_Vector]
   NCT_Id_Vector2 <- concat_ids(trial_id_df, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(trial_id_df, "NCT_Ids"))]
@@ -369,7 +387,8 @@ update_db_for_NCT_changes <- function(main_con,
     ) |>
     dplyr::filter(!is.na(NCTId)) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
-    dplyr::select(Query_Date, Program, Guideline.number, URL, everything(), -Rank)
+    dplyr::select(Query_Date, Program, Guideline.number, URL, everything(), -Rank) |>
+    dplyr::distinct() # remove any duplicates
 
   update_db(main_con, "NCT", NCT_DF)
 }
@@ -403,7 +422,8 @@ update_db_for_ISRCTN_changes <- function(main_con,
     dplyr::right_join(trial_id_df[, c("Program", "Guideline.number", "ISRCTN_Ids")], by = c("ISRCTN_No" = "ISRCTN_Ids"), multiple = "all") |>
     dplyr::filter(!is.na(ISRCTN_No)) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
-    dplyr::select(Query_Date, Program, Guideline.number, URL, everything())
+    dplyr::select(Query_Date, Program, Guideline.number, URL, everything()) |>
+    dplyr::distinct()
 
   # Update db
   update_db(main_con, "ISRCTN", ISRCTN_DF)
@@ -437,7 +457,8 @@ update_db_for_NIHR_changes <- function(main_con,
     dplyr::right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") |>
     tidyr::drop_na(projectjoin) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
-    dplyr::select(Query_Date, Program, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date)
+    dplyr::select(Query_Date, Program, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date) |>
+    dplyr::distinct()
 
   update_db(main_con, "NIHR", NIHR_DF)
 }
@@ -453,8 +474,9 @@ update_db_for_NIHR_changes <- function(main_con,
 #' @import httr2
 #' @import ctrdata
 #' @export
-update_db_for_EU_changes <- function(main_con,
-                                     trial_id_df) {
+update_db_for_EU_changes <- function(main_con, trial_id_df) {
+  #print("Inside update_db_for_EU_changes")
+
   # Create vector of EU Ids
   EU_Vector <- collapse_ids(trial_id_df, "EU_Ids", "+OR+")
 
@@ -482,19 +504,18 @@ update_db_for_EU_changes <- function(main_con,
   try(ctrdata::ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
   # Collapse fields into 1 vector
-  EU_DF <-
-    ctrdata::dbGetFieldsIntoDf(
-      stringr::str_subset(
-        c(
-          ctrdata::dbFindFields("end_of_trial", con = eu_temp_db),
-          ctrdata::dbFindFields("a3", con = eu_temp_db),
-          ctrdata::dbFindFields("a4", con = eu_temp_db)
-        ),
-        "_it|_es|_fr|_nl",
-        negate = TRUE
+  EU_DF <- ctrdata::dbGetFieldsIntoDf(
+    stringr::str_subset(
+      c(
+        ctrdata::dbFindFields("end_of_trial", con = eu_temp_db),
+        ctrdata::dbFindFields("a3", con = eu_temp_db),
+        ctrdata::dbFindFields("a4", con = eu_temp_db)
       ),
-      con = eu_temp_db
-    ) |>
+      "_it|_es|_fr|_nl",
+      negate = TRUE
+    ),
+    con = eu_temp_db
+  ) |>
     dplyr::mutate(EU_Ids = stringr::str_extract(`_id`, "^\\d{4}-\\d{6}-\\d{2}")) |>
     dplyr::right_join(trial_id_df, multiple = "all") |>
     dplyr::filter(!is.na(`_id`)) |>
@@ -508,6 +529,7 @@ update_db_for_EU_changes <- function(main_con,
     dplyr::distinct()
 
   update_db(main_con, "EU", EU_DF)
+
 }
 
 #' Wrapper Function for All Updates (No PubMed or Email)
@@ -516,17 +538,22 @@ update_db_for_EU_changes <- function(main_con,
 #'
 #' @param main_con A database connection object. Defaults to a connection to the TrialTracker SQLite database.
 #' @param trial_id_df A dataframe containing trial IDs. Defaults to reading from the Trial_IDs table in the database.
+#' @param db_connect_func A function for establishing a database connection (default: `DBI::dbConnect`).
+#' @param db_read_func A function for reading a table from the database (default: `DBI::dbReadTable`).
 #' @return None. The function updates the database for all registries.
 #' @import DBI
 #' @import RSQLite
 #' @export
-download_trial_info_wrapper_no_pm_or_email <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
-                                                       trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs")) {
-  # Update dbs
+download_trial_info_wrapper_no_pm_or_email <- function(
+    main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
+    trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs")) {
+
+  # Call update functions
   update_db_for_NCT_changes(main_con = main_con, trial_id_df = trial_id_df)
   update_db_for_ISRCTN_changes(main_con = main_con, trial_id_df = trial_id_df)
   update_db_for_NIHR_changes(main_con = main_con, trial_id_df = trial_id_df)
   update_db_for_EU_changes(main_con = main_con, trial_id_df = trial_id_df)
+
 }
 
 #' Wrapper Function for All Updates
