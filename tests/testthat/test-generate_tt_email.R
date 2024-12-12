@@ -4,10 +4,6 @@ library(stringr)
 
 test_that("generate_tt_email works correctly", {
 
-  # Set the environment variable locally for the test
-  devs <- readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv")
-  users <- readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv")
-
   # Setup test params
   test_root <- rprojroot::find_root(rprojroot::is_testthat)
   program <- "COVID"
@@ -16,7 +12,9 @@ test_that("generate_tt_email works correctly", {
     stringr::str_subset("_COVID_")
 
   # Create email (dev version)
-  email <- generate_tt_email(program, attachments, dev_flag = TRUE)
+  email <- generate_tt_email(program, attachments, dev_flag = TRUE,
+                             devs = readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv"),
+                             users = readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv"))
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
@@ -37,7 +35,9 @@ test_that("generate_tt_email works correctly", {
 
   # Test without attachments (dev version)
   attachments <- NULL
-  email <- generate_tt_email(program, attachments, dev_flag = TRUE)
+  email <- generate_tt_email(program, attachments, dev_flag = TRUE,
+                             devs = readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv"),
+                             users = readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv"))
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email,
@@ -82,7 +82,9 @@ test_that("generate_tt_email works correctly", {
 
   # Check case of no attachments (live version)
   attachments <- NULL
-  email <- generate_tt_email(program, attachments, dev_flag = FALSE)
+  email <- generate_tt_email(program, attachments, dev_flag = FALSE,
+                             devs = readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv"),
+                             users = readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv"))
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
