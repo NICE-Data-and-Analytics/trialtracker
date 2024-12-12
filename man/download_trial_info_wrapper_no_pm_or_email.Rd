@@ -7,9 +7,7 @@
 download_trial_info_wrapper_no_pm_or_email(
   main_con = DBI::dbConnect(RSQLite::SQLite(),
     "data/RSQLite_data/TrialTracker-db.sqlite"),
-  trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs"),
-  db_connect_func = DBI::dbConnect,
-  db_read_func = DBI::dbReadTable
+  trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs")
 )
 }
 \arguments{

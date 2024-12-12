@@ -38,7 +38,8 @@ generate_esearch_url <- function(search_term, api_object,
 get_esearch_results <- function(search_term, api_object,
                                 mindate = Sys.Date() - 1,
                                 maxdate = Sys.Date() - 1) {
-  Sys.sleep(0.1)
+
+  Sys.sleep(0.1) # sleep to prevent too many API hits
 
   url <- generate_esearch_url(search_term, api_object, mindate = mindate, maxdate = maxdate)
   request <- httr2::request(url)

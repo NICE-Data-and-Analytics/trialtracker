@@ -3,11 +3,17 @@ library(emayili)
 library(stringr)
 
 test_that("generate_tt_email works correctly", {
+
+  # Set the environment variable locally for the test
+  devs <- readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv")
+  users <- readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv")
+
   # Setup test params
-  proj_root <- rprojroot::find_root(rprojroot::is_r_package)
-  setwd(proj_root)
+  test_root <- rprojroot::find_root(rprojroot::is_testthat)
   program <- "COVID"
-  attachments <- dir("tests/testthat/test_data", full.names = TRUE) |> stringr::str_subset("_COVID_")
+  attachments <- dir(file.path(test_root, 'test_data'),
+                     full.names = TRUE) |>
+    stringr::str_subset("_COVID_")
 
   # Create email (dev version)
   email <- generate_tt_email(program, attachments, dev_flag = TRUE)
@@ -16,12 +22,10 @@ test_that("generate_tt_email works correctly", {
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email,
-               readLines("secrets/devs.csv")
-               )
+  expect_equal(email$headers$To$values$email, devs)
 
   # Check the 'Cc' field
-  expect_equal(email$headers$Cc$values$email, readLines("secrets/devs.csv"))
+  expect_equal(email$headers$Cc$values$email, devs)
 
   # Check the 'subject' field
   expect_equal(as.character(email$headers$Subject$values), "Trial Tracking Changes - COVID - DEV VERSION")
@@ -36,32 +40,37 @@ test_that("generate_tt_email works correctly", {
   email <- generate_tt_email(program, attachments, dev_flag = TRUE)
 
   # Check the 'from' field
-  expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
+  expect_equal(email$headers$From$values$email,
+               "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, readLines("secrets/devs.csv"))
+  expect_equal(email$headers$To$values$email, devs)
 
   # Check the 'Cc' field
   expect_null(email$headers$Cc$values$email)
 
   # Check the 'subject' field
-  expect_equal(as.character(email$headers$Subject$values), "TrialTracker ran today - COVID - DEV VERSION")
+  expect_equal(as.character(email$headers$Subject$values),
+               "TrialTracker ran today - COVID - DEV VERSION")
 
   # Check (lack of) attachments
   expect_equal(length(email$parts) - 1, 0)
 
   # Now Test live version
-  attachments <- dir("tests/testthat/test_data", full.names = TRUE) |> stringr::str_subset("_COVID_")
+  attachments <- dir(file.path(test_root, 'test_data'),
+                     full.names = TRUE) |>
+    stringr::str_subset("_COVID_")
+
   email <- generate_tt_email(program, attachments, dev_flag = FALSE)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, readLines("secrets/users.csv"))
+  expect_equal(email$headers$To$values$email, users)
 
   # Check the 'Cc' field
-  expect_equal(email$headers$Cc$values$email, readLines("secrets/devs.csv"))
+  expect_equal(email$headers$Cc$values$email, devs)
 
   # Check the 'subject' field
   expect_equal(as.character(email$headers$Subject$values), "Trial Tracking Changes - COVID")
@@ -79,7 +88,7 @@ test_that("generate_tt_email works correctly", {
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
 
   # Check the 'to' field
-  expect_equal(email$headers$To$values$email, readLines("secrets/devs.csv"))
+  expect_equal(email$headers$To$values$email, devs)
 
   # Check the 'Cc' field
   expect_null(email$headers$Cc$values$email)
@@ -90,3 +99,4 @@ test_that("generate_tt_email works correctly", {
   # Check (lack of) attachments
   expect_equal(length(email$parts) - 1, 0)
 })
+

@@ -144,8 +144,11 @@ write_pubmed_dfs_to_disk <- function(PM_DF, daily_path, PM_DF_Name) {
 #' @import emayili
 #' @export
 generate_tt_email <- function(program, attachments, dev_flag) {
-  users <- readLines("secrets/users.csv")
-  devs <- readLines("secrets/devs.csv")
+
+  proj_root <- rprojroot::find_root(rprojroot::is_r_package)
+
+  users <- readLines(file.path(proj_root, 'secrets', 'users.csv'))
+  devs <- readLines(file.path(proj_root, 'secrets', 'devs.csv'))
 
   email <- emayili::envelope() |>
     emayili::from("robert.willans@nice.org.uk")
