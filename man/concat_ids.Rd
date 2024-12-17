@@ -17,7 +17,4 @@ A vector of unique, non-missing IDs.
 \description{
 This internal function concatenates Trial IDs from a specified column in a dataframe, ensuring no missing or duplicate values. It is used for constructing API URLs.
 }
-\examples{
-df <- data.frame(id = c("NCT1234567", "NCT987654321", NA, "NCT1234567"))
-concat_ids(df, "id")
-}
+\keyword{internal}

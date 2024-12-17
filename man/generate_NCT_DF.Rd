@@ -17,8 +17,9 @@ This function returns a formatted tibble from a given ClinicalTrials.gov API cal
 }
 \examples{
 \dontrun{
-api_url <- "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=NCT03146143\%7CNCT00408044&fields=NCTId\%7COrgStudyId\%7CCondition\%7CBriefTitle\%7CAcronym\%7COverallStatus\%7CPrimaryCompletionDate\%7CCompletionDate\%7CResultsFirstSubmitDate\%7CResultsFirstPostDate\%7CLastUpdatePostDate\%7CSeeAlsoLinkURL&pageSize=1000"
-df <- generate_NCT_DF(api_url)
+api_url <- "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=NCT03146143\%7CNCT00408044"
+api_fields <- "&fields=NCTId\%7COrgStudyId\%7CCondition\%7CBriefTitle\%7CAcronym\%7COverallStatus\%7CPrimaryCompletionDate\%7CCompletionDate\%7CResultsFirstSubmitDate\%7CResultsFirstPostDate\%7CLastUpdatePostDate\%7CSeeAlsoLinkURL&pageSize=1000"
+df <- generate_NCT_DF(c(api_url, api_fields))
 print(df)
 }
 }

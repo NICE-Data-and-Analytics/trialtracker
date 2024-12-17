@@ -1,6 +1,5 @@
 library(testthat)
-library(mockery)
-library(dplyr)
+loadNamespace("mockery")
 
 # Mock function to replace dbReadTable
 mock_dbReadTable <- function(con, registry) {

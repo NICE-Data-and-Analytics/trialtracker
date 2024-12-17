@@ -33,7 +33,7 @@ generate_esearch_url <- function(search_term, api_object,
 #' @param mindate The start date for the search. Defaults to yesterday's date.
 #' @param maxdate The end date for the search. Defaults to yesterday's date.
 #' @return A list containing the ESearch results.
-#' @import httr2
+#' @importFrom httr2 request req_perform resp_body_json
 #' @export
 get_esearch_results <- function(search_term, api_object,
                                 mindate = Sys.Date() - 1,
@@ -72,7 +72,7 @@ generate_efetch_url <- function(pmid, api_object) {
 #' @param pmid A character string specifying the PubMed ID.
 #' @param api_object A character string specifying the API key.
 #' @return A list containing the EFetch results.
-#' @import httr2
+#' @importFrom httr2 request req_perform resp_body_xml
 #' @export
 get_efetch_results <- function(pmid, api_object) {
   Sys.sleep(0.1)
@@ -90,8 +90,8 @@ get_efetch_results <- function(pmid, api_object) {
 #' @param single_id_query_results A list containing the query results for a single ID.
 #' @param search_term A character string specifying the search term.
 #' @return A tibble dataframe containing the PubMed results.
-#' @import tibble
-#' @import xml2
+#' @importFrom tibble tibble
+#' @importFrom xml2 xml_text xml_find_first xml_find_all
 #' @export
 return_pm_df <- function(single_id_query_results, search_term) {
   tibble::tibble(
@@ -129,7 +129,8 @@ get_efetch_results_in_tibble_form <- function(pmid, api_object, search_term) {
 #' @param mindate The start date for the search. Defaults to yesterday's date.
 #' @param maxdate The end date for the search. Defaults to yesterday's date.
 #' @return A tibble dataframe containing the PubMed results.
-#' @import dplyr
+#' @importFrom dplyr bind_rows
+#' @importFrom purrr map
 #' @export
 generate_pm_tibble_from_search_term <- function(search_term, api_object, mindate = Sys.Date() - 1, maxdate = Sys.Date() - 1) {
 
@@ -150,7 +151,8 @@ generate_pm_tibble_from_search_term <- function(search_term, api_object, mindate
 #' @param mindate The start date for the search. Defaults to yesterday's date.
 #' @param maxdate The end date for the search. Defaults to yesterday's date.
 #' @return A tibble dataframe containing the PubMed results.
-#' @import dplyr
+#' @importFrom dplyr bind_rows
+#' @importFrom purrr map
 #' @export
 generate_pm_tibble_from_search_term_series <- function(search_term_list, api_object, mindate = Sys.Date() - 1, maxdate = Sys.Date() - 1) {
   purrr::map(search_term_list, generate_pm_tibble_from_search_term, api_object = api_object, mindate = mindate, maxdate = maxdate) |>

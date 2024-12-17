@@ -17,7 +17,4 @@ A vector of unique, non-missing IDs.
 \description{
 This internal function generates a list of unique, non-missing IDs from a specified column in a dataframe. It is used to prepare IDs for inclusion in an API call.
 }
-\examples{
-trial_id_df <- data.frame(CT_Ids = c("ID1", "ID2", NA, "ID1"))
-create_search_list(trial_id_df, "CT")
-}
+\keyword{internal}

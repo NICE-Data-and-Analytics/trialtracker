@@ -1,5 +1,5 @@
 library(testthat)
-library(compareDF)
+loadNamespace("compareDF")
 library(mockery)
 
 # Mock data for testing

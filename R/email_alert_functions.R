@@ -5,8 +5,8 @@
 #' @param registry A character string specifying the registry name.
 #' @param main_con A database connection object.
 #' @return The last entry date before today as a Date object.
-#' @import DBI
-#' @import dplyr
+#' @importFrom DBI dbReadTable
+#' @importFrom dplyr filter pull
 #' @export
 get_last_registry_entry_before_today <- function(registry, main_con) {
   DBI::dbReadTable(main_con, registry) |>
@@ -28,10 +28,10 @@ get_last_registry_entry_before_today <- function(registry, main_con) {
 #' @param exclude_cols A character vector of columns to exclude. Defaults to NULL.
 #' @param regex_pattern A regex pattern to filter Guideline numbers. Defaults to ".".
 #' @return A comparison dataframe of changes.
-#' @import DBI
-#' @import dplyr
-#' @import stringr
-#' @import compareDF
+#' @importFrom DBI dbReadTable
+#' @importFrom dplyr filter
+#' @importFrom stringr str_detect
+#' @importFrom compareDF compare_df
 #' @export
 pull_change <- function(registry_table, main_con, start_date, end_date, group_cols = NULL, exclude_cols = NULL, regex_pattern = ".") {
   if (length(start_date) == 0) {
@@ -70,9 +70,9 @@ pull_change <- function(registry_table, main_con, start_date, end_date, group_co
 #' @param end_date The end date for generating the dataframe.
 #' @param regex_pattern A regex pattern to filter Guideline numbers. Defaults to ".".
 #' @return A dataframe of PubMed results.
-#' @import DBI
-#' @import dplyr
-#' @import stringr
+#' @importFrom DBI dbReadTable
+#' @importFrom dplyr filter mutate distinct
+#' @importFrom stringr str_detect
 #' @export
 generate_pubmed_df_for_email_attachment <- function(main_con, registry_table, start_date, end_date, regex_pattern = ".") {
   DBI::dbReadTable(main_con, registry_table) |>
@@ -93,7 +93,7 @@ generate_pubmed_df_for_email_attachment <- function(main_con, registry_table, st
 #' @param DF_Name A character string specifying the name of the dataframe.
 #' @param prog_name A character string specifying the program name. Defaults to "".
 #' @return None. The function writes the changes to disk.
-#' @import compareDF
+#' @importFrom compareDF create_output_table
 #' @export
 write_changes_to_disk <- function(Change_DF, daily_path, DF_Name, prog_name = "") {
   if (nrow(Change_DF$comparison_df) > 0) {
@@ -122,7 +122,7 @@ write_changes_to_disk <- function(Change_DF, daily_path, DF_Name, prog_name = ""
 #' @param daily_path A character string specifying the path to save the file.
 #' @param PM_DF_Name A character string specifying the name of the PubMed dataframe.
 #' @return None. The function writes the PubMed dataframes to disk.
-#' @import readr
+#' @importFrom readr write_csv
 #' @export
 write_pubmed_dfs_to_disk <- function(PM_DF, daily_path, PM_DF_Name) {
   if (nrow(PM_DF) > 0) {
@@ -140,8 +140,10 @@ write_pubmed_dfs_to_disk <- function(PM_DF, daily_path, PM_DF_Name) {
 #' @param program A character string specifying the program name.
 #' @param attachments A character vector of file paths to attach to the email.
 #' @param dev_flag A logical flag indicating if the email is for the development version (dev team only).
+#' @param users A character vector of user emails
+#' @param devs A character vector of developer emails
 #' @return An email object.
-#' @import emayili
+#' @importFrom emayili envelope from to cc subject text attachment
 #' @export
 generate_tt_email <- function(program, attachments, dev_flag,
                               users = readLines('secrets/users.csv'),
@@ -216,7 +218,7 @@ generate_tt_email <- function(program, attachments, dev_flag,
 #' @param programs A character vector of program names.
 #' @param main_con A database connection object.
 #' @return None. The function generates PubMed dataframes and writes them to disk.
-#' @import purrr
+#' @importFrom purrr walk2
 #' @export
 generate_all_pubmed_dfs_for_all_programs_one_registry <- function(registry, prog_regexes, programs, main_con) {
   purrr::walk2(
@@ -241,9 +243,9 @@ generate_all_pubmed_dfs_for_all_programs_one_registry <- function(registry, prog
 #' @param old_or_new A character string specifying whether to pull old or new data.
 #' @param main_con A database connection object.
 #' @return A dataframe of NIHR data.
-#' @import DBI
-#' @import dplyr
-#' @import stringr
+#' @importFrom DBI dbReadTable
+#' @importFrom dplyr filter
+#' @importFrom stringr str_detect
 #' @export
 pull_nihr_change <- function(prog_regex, old_or_new, main_con) {
   DBI::dbReadTable(main_con, "NIHR") |>
@@ -266,7 +268,7 @@ pull_nihr_change <- function(prog_regex, old_or_new, main_con) {
 #' @param main_con A database connection object.
 #' @param daily_path A character string specifying the path to save the file.
 #' @return None. The function generates a comparison table and writes it to disk.
-#' @import compareDF
+#' @importFrom compareDF compare_df
 #' @export
 generate_nihr_comparison_table <- function(program, program_regex, main_con, daily_path) {
   compareDF::compare_df(pull_nihr_change(prog_regex = program_regex, "new", main_con),
@@ -288,7 +290,7 @@ generate_nihr_comparison_table <- function(program, program_regex, main_con, dai
 #' @param programs A character vector of program names.
 #' @param main_con A database connection object.
 #' @return None. The function generates PubMed dataframes and writes them to disk.
-#' @import purrr
+#' @importFrom purrr walk
 #' @export
 generate_all_pubmed_dfs_for_all_programs_and_registries <- function(registry_tables, prog_regexes, programs, main_con) {
   purrr::walk(registry_tables,
@@ -311,7 +313,7 @@ generate_all_pubmed_dfs_for_all_programs_and_registries <- function(registry_tab
 #' @param programs A character vector of program names.
 #' @param daily_path A character string specifying the path to save the files.
 #' @return None. The function generates change files and writes them to disk.
-#' @import purrr
+#' @importFrom purrr walk2
 #' @export
 generate_change_files_for_all_programs_in_one_registry <- function(registry,
                                                                    main_con,
@@ -345,8 +347,7 @@ generate_change_files_for_all_programs_in_one_registry <- function(registry,
 #' @param dev_flag A logical flag indicating if the email is for development purposes.
 #' @param smtp An SMTP server object.
 #' @return None. The function sends an email alert with attachments.
-#' @import stringr
-#' @import emayili
+#' @importFrom stringr str_subset
 #' @export
 load_attachments_and_send_email_alert_for_one_program <- function(program, daily_path, dev_flag, smtp = smtp) {
   file_list <- dir(daily_path, full.names = TRUE) |> stringr::str_subset(paste0("_", program, "_"))
@@ -364,7 +365,7 @@ load_attachments_and_send_email_alert_for_one_program <- function(program, daily
 #' @param dev_flag A logical flag indicating if the email is for development purposes.
 #' @param smtp An SMTP server object.
 #' @return None. The function sends email alerts with attachments.
-#' @import purrr
+#' @importFrom purrr walk
 #' @export
 load_attachments_and_send_email_alert_for_all_programs <- function(programs = programs, daily_path, dev_flag, smtp) {
   purrr::walk(programs,
@@ -385,7 +386,7 @@ load_attachments_and_send_email_alert_for_all_programs <- function(programs = pr
 #' @param main_con A database connection object.
 #' @param daily_path A character string specifying the path to save the files.
 #' @return None. The function generates change files and writes them to disk.
-#' @import purrr
+#' @importFrom purrr pwalk
 #' @export
 generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, registry_tables, main_con, daily_path) {
   if (length(registry_tables) == 0) {
@@ -423,7 +424,7 @@ generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, regi
 #' @param main_con A database connection object.
 #' @param daily_path A character string specifying the path to save the files.
 #' @return None. The function generates change files and writes them to disk.
-#' @import purrr
+#' @importFrom purrr walk2
 #' @export
 generate_change_files_for_nihr <- function(prog_regexes, programs, main_con, daily_path) {
   purrr::walk2(
@@ -442,12 +443,12 @@ generate_change_files_for_nihr <- function(prog_regexes, programs, main_con, dai
 #' @param dev_flag A logical flag indicating if the email is for development purposes.
 #' @param base_path A character string specifying the base path for the daily directory.
 #' @return None. The function generates and sends email alerts.
-#' @import emayili
-#' @import readr
-#' @import DBI
-#' @import RSQLite
+#' @importFrom emayili server
+#' @importFrom readr read_file
+#' @importFrom DBI dbConnect dbDisconnect
+#' @importFrom RSQLite SQLite
 #' @export
-generate_email_alerts <- function(dev_flag, base_path = "data/email_attachments") {
+generate_email_alerts <- function(dev_flag, base_path = "inst/extdata/email_attachments") {
 
   # Create daily directory to store attachment files
   daily_path <- file.path(base_path, Sys.Date(), "/")
@@ -466,7 +467,7 @@ generate_email_alerts <- function(dev_flag, base_path = "data/email_attachments"
   )
 
   # Setup con
-  main_con <- DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite")
+  main_con <- DBI::dbConnect(RSQLite::SQLite(), "inst/extdata/RSQLite_data/TrialTracker-db.sqlite")
 
   # List of programs (& regex matches)
   programs <- c("COVID", "IP", "Other")

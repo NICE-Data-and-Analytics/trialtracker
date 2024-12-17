@@ -1,6 +1,5 @@
 library(testthat)
 library(mockery)
-library(compareDF)
 
 # Mock data
 mock_new_data <- data.frame(

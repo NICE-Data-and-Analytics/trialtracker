@@ -1,7 +1,6 @@
 library(testthat)
 library(mockery)
-library(stringr)
-library(emayili)
+loadNamespace("emayili")
 
 # Mock functions
 mock_generate_tt_email <- function(program, attachments, dev_flag) {

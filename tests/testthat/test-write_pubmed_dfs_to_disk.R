@@ -1,6 +1,6 @@
 library(testthat)
 library(mockery)
-library(readr)
+loadNamespace("readr")
 
 # Mock data for testing
 PM_DF <- data.frame(

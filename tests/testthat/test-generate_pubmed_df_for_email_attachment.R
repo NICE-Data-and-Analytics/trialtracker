@@ -1,7 +1,5 @@
 library(testthat)
-library(dplyr)
-library(stringr)
-library(DBI)
+loadNamespace("DBI")
 
 # Sample data for testing
 sample_data <- data.frame(
@@ -11,8 +9,8 @@ sample_data <- data.frame(
 )
 
 # Mock database connection and table
-con <- dbConnect(RSQLite::SQLite(), ":memory:")
-dbWriteTable(con, "registry_table", sample_data)
+con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+DBI::dbWriteTable(con, "registry_table", sample_data)
 
 # Unit test
 test_that("generate_pubmed_df_for_email_attachment works correctly", {

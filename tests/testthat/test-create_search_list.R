@@ -1,6 +1,4 @@
 library(testthat)
-library(dplyr)
-library(tidyr)
 
 test_that("create_search_list works correctly", {
   # Test 1: Basic Functionality

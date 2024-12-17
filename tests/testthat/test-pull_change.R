@@ -1,6 +1,4 @@
 library(testthat)
-library(dplyr)
-library(compareDF)
 library(mockery)
 
 # Unit test for pull_change function

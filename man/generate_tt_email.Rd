@@ -4,7 +4,13 @@
 \alias{generate_tt_email}
 \title{Generate Trial Tracker Email}
 \usage{
-generate_tt_email(program, attachments, dev_flag)
+generate_tt_email(
+  program,
+  attachments,
+  dev_flag,
+  users = readLines("secrets/users.csv"),
+  devs = readLines("secrets/devs.csv")
+)
 }
 \arguments{
 \item{program}{A character string specifying the program name.}
@@ -12,6 +18,10 @@ generate_tt_email(program, attachments, dev_flag)
 \item{attachments}{A character vector of file paths to attach to the email.}
 
 \item{dev_flag}{A logical flag indicating if the email is for the development version (dev team only).}
+
+\item{users}{A character vector of user emails}
+
+\item{devs}{A character vector of developer emails}
 }
 \value{
 An email object.

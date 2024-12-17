@@ -1,6 +1,5 @@
 library(testthat)
 library(mockery)
-library(purrr)
 
 # Mock function
 mock_generate_nihr_comparison_table <- function(program, program_regex, main_con, daily_path) {

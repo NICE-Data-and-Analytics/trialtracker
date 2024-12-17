@@ -1,6 +1,5 @@
 library(testthat)
 library(mockery)
-library(purrr)
 
 # Mock function
 mock_load_attachments_and_send_email_alert_for_one_program <- function(program, daily_path, dev_flag, smtp) {

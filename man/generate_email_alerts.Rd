@@ -4,7 +4,7 @@
 \alias{generate_email_alerts}
 \title{Generate Email Alerts}
 \usage{
-generate_email_alerts(dev_flag, base_path = "data/email_attachments")
+generate_email_alerts(dev_flag, base_path = "inst/extdata/email_attachments")
 }
 \arguments{
 \item{dev_flag}{A logical flag indicating if the email is for development purposes.}

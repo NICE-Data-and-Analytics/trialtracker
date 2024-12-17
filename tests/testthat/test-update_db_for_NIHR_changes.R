@@ -1,8 +1,4 @@
 library(testthat)
-library(dplyr)
-library(jsonlite)
-library(tidyr)
-library(stringr)
 
 # Mock functions
 mock_fromJSON <- function(url) {

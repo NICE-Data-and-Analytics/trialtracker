@@ -1,9 +1,7 @@
 library(testthat)
 library(mockery)
-library(DBI)
-library(RSQLite)
-library(readr)
-library(stringr)
+loadNamespace("DBI")
+loadNamespace("RSQLite")
 library(dplyr)
 
 # Define the test

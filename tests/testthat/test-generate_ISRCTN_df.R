@@ -1,8 +1,5 @@
 library(testthat)
-library(httptest2)
 library(httr2)
-library(xml2)
-library(tibble)
 
 # Mock XML response
 mock_xml <- '

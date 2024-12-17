@@ -1,13 +1,7 @@
 library(testthat)
-library(dplyr)
-library(httr2)
-library(ctrdata)
-library(stringr)
-library(nodbi)
 library(mockery)
-library(tibble)
-library(DBI)
-library(RSQLite)
+loadNamespace("tibble")
+loadNamespace("RSQLite")
 
 test_that("download_trial_info_wrapper_no_pm_or_email works with default and custom parameters", {
   # Mock functions for updates

@@ -1,13 +1,9 @@
 library(testthat)
-library(dplyr)
 library(httr2)
-library(ctrdata)
-library(stringr)
-library(nodbi)
 library(mockery)
-library(tibble)
-library(DBI)
-library(RSQLite)
+loadNamespace("tibble")
+loadNamespace("DBI")
+loadNamespace("RSQLite")
 
 # Sample data
 trial_id_df <- tibble::tibble(

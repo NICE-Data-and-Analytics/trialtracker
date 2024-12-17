@@ -4,10 +4,12 @@
 \alias{backup_SQLite_db}
 \title{Create a Monthly Backup of SQLite Database Files}
 \usage{
-backup_SQLite_db(backup_subdirectory_path = "data/monthly_SQLite_backup")
+backup_SQLite_db(
+  backup_subdirectory_path = "inst/extdata/monthly_SQLite_backup"
+)
 }
 \arguments{
-\item{backup_subdirectory_path}{A character string specifying the path to the directory where monthly backups will be stored. Defaults to "data/monthly_SQLite_backup".}
+\item{backup_subdirectory_path}{A character string specifying the path to the directory where monthly backups will be stored. Defaults to "inst/extdata/monthly_SQLite_backup".}
 }
 \value{
 None. The function is called for its side effects.

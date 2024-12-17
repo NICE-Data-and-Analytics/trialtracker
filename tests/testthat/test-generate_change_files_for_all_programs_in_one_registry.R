@@ -1,6 +1,5 @@
 library(testthat)
 library(mockery)
-library(purrr)
 
 # Mock functions
 mock_pull_change <- function(registry_table, main_con, regex_pattern, start_date, end_date, group_cols, exclude_cols) {

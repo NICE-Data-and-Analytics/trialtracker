@@ -1,7 +1,6 @@
 library(testthat)
 library(DBI)
 library(RSQLite)
-library(dplyr)
 
 test_that("update_db works correctly", {
   # Create an in-memory SQLite database

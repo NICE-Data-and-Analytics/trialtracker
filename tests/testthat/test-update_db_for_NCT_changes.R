@@ -1,8 +1,7 @@
 library(testthat)
 library(mockery)
-library(DBI)
-library(RSQLite)
-library(dplyr)
+loadNamespace("DBI")
+loadNamespace("RSQLite")
 
 # Define the test
 test_that("update_db_for_NCT_changes works correctly", {

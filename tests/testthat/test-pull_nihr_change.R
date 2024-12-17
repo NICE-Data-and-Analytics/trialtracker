@@ -1,8 +1,5 @@
 library(testthat)
 library(mockery)
-library(dplyr)
-library(DBI)
-library(stringr)
 
 # Reset Sys.Date() to the current date
 Sys.setenv(TZ = "UTC") # Ensure consistent timezone

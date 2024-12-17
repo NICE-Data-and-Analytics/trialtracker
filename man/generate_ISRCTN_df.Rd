@@ -16,6 +16,9 @@ A tibble dataframe containing the ISRCTN trial data.
 This function retrieves ISRCTN trial data from a given URL and returns it as a dataframe.
 }
 \examples{
-ISRCTN_URL <- "https://www.isrctn.com/api/query/format/who?q=ISRCTN27106947\%20OR\%20ISRCTN16033549\%20OR\%20ISRCTN17573805\%20OR\%20ISRCTN73327972\%20OR\%20ISRCTN32309003&limit=15"
-df <- generate_ISRCTN_df(ISRCTN_URL)
+\dontrun{
+ISRCTN_URL <- "https://www.isrctn.com/api/query/format/who?q="
+ISRCTN_query <- "ISRCTN27106947\%20OR\%20ISRCTN16033549\%20OR\%20ISRCTN17573805\%20OR\%20ISRCTN73327972&limit=15"
+df <- generate_ISRCTN_df(c(ISRCTN_URL, ISRCTN_query)
+}
 }

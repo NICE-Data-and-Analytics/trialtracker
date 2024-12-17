@@ -5,11 +5,9 @@
 #' @param df A dataframe containing the IDs.
 #' @param id_col A string specifying the column name that contains the IDs.
 #' @return A vector of unique, non-missing IDs.
-#' @import dplyr
-#' @import tidyr
-#' @examples
-#' df <- data.frame(id = c("NCT1234567", "NCT987654321", NA, "NCT1234567"))
-#' concat_ids(df, "id")
+#' @importFrom dplyr select filter distinct pull all_of everything
+#' @importFrom tidyr drop_na
+#' @keywords internal
 concat_ids <- function(df, id_col) {
 
   if (!id_col %in% colnames(df)) {
@@ -17,13 +15,13 @@ concat_ids <- function(df, id_col) {
   }
 
   df <- df |>
-    dplyr::select(tidyselect::all_of(id_col)) |>
+    dplyr::select(dplyr::all_of(id_col)) |>
     tidyr::drop_na()
 
   if (nrow(df) > 0) {
     return(
       df |>
-        dplyr::filter(dplyr::if_any(.cols = everything(), .fns = ~ (. != ""))) |>
+        dplyr::filter(dplyr::if_any(.cols = dplyr::everything(), .fns = ~ (. != ""))) |>
         dplyr::distinct() |>
         dplyr::pull()
     )
@@ -43,9 +41,7 @@ concat_ids <- function(df, id_col) {
 #' @param id_col A string specifying the column name that contains the IDs.
 #' @param paste_collapse A string to use as the delimiter for collapsing the IDs.
 #' @return A single string of concatenated IDs separated by the specified delimiter.
-#' @examples
-#' df <- data.frame(id = c("NCT1234567", "NCT987654321", NA, "NCT1234567"))
-#' collapse_ids(df, "id", ",")
+#' @keywords internal
 collapse_ids <- function(df, id_col, paste_collapse) {
   concat_ids(df, id_col) |>
     paste0(collapse = paste_collapse)
@@ -58,11 +54,9 @@ collapse_ids <- function(df, id_col, paste_collapse) {
 #' @param trial_id_df A dataframe containing the trial IDs.
 #' @param registry A string specifying the registry name, which is used to construct the column name containing the IDs.
 #' @return A vector of unique, non-missing IDs.
-#' @import dplyr
-#' @import tidyr
-#' @examples
-#' trial_id_df <- data.frame(CT_Ids = c("ID1", "ID2", NA, "ID1"))
-#' create_search_list(trial_id_df, "CT")
+#' @importFrom dplyr select distinct if_any filter pull all_of everything
+#' @importFrom tidyr drop_na
+#' @keywords internal
 create_search_list <- function(trial_id_df, registry) {
   id_vector <- paste0(registry, "_Ids")
 
@@ -71,10 +65,10 @@ create_search_list <- function(trial_id_df, registry) {
   }
 
   trial_id_df |>
-    dplyr::select(all_of(id_vector)) |>
+    dplyr::select(dplyr::all_of(id_vector)) |>
     dplyr::distinct() |>
     tidyr::drop_na() |>
-    dplyr::filter(dplyr::if_any(.cols = everything(), .fns = ~ (. != ""))) |>
+    dplyr::filter(dplyr::if_any(.cols = dplyr::everything(), .fns = ~ (. != ""))) |>
     dplyr::pull()
 }
 
@@ -86,8 +80,7 @@ create_search_list <- function(trial_id_df, registry) {
 #' @param registry A string specifying the name of the registry (table) to update.
 #' @param DF A dataframe containing the data to be inserted into the database.
 #' @return None. This function is called for its side effects.
-#' @import DBI
-#' @import dplyr
+#' @importFrom DBI dbListTables dbCreateTable dbAppendTable dbWriteTable
 #' @export
 #' @examples
 #' \dontrun{
@@ -100,12 +93,15 @@ update_db <- function(main_con, registry, DF) {
     if (!(registry %in% DBI::dbListTables(main_con))) {
       DBI::dbCreateTable(main_con, registry, DF)
       DBI::dbAppendTable(main_con, registry, DF)
-    } else if (nrow(DBI::dbReadTable(main_con, registry) |> dplyr::filter(Query_Date == Sys.Date())) == 0) {
-      DBI::dbAppendTable(main_con, registry, DF)
-    } else if (nrow(DBI::dbReadTable(main_con, registry) |> dplyr::filter(Query_Date == Sys.Date())) > 0) {
-      temp_df <- DBI::dbReadTable(main_con, registry) |> dplyr::filter(Query_Date < Sys.Date())
-      DBI::dbWriteTable(main_con, registry, temp_df, overwrite = TRUE)
-      DBI::dbAppendTable(main_con, registry, DF)
+    } else {
+      existing_data <- DBI::dbReadTable(main_con, registry)
+      if (nrow(existing_data[existing_data$Query_Date == Sys.Date(), ]) == 0) {
+        DBI::dbAppendTable(main_con, registry, DF)
+      } else {
+        temp_df <- existing_data[existing_data$Query_Date < Sys.Date(), ]
+        DBI::dbWriteTable(main_con, registry, temp_df, overwrite = TRUE)
+        DBI::dbAppendTable(main_con, registry, DF)
+      }
     }
   }
 }
@@ -155,17 +151,18 @@ generate_NCT_URL <- function(NCT_ID_Vec) {
 #'
 #' @param url A string containing the URL for the API call to ClinicalTrials.gov.
 #' @return A tibble containing the formatted data from the API response.
-#' @import dplyr
-#' @import tidyr
-#' @import purrr
-#' @import jsonlite
-#' @import tibble
-#' @import stringr
+#' @importFrom dplyr na_if arrange desc mutate row_number
+#' @importFrom tidyr unnest
+#' @importFrom purrr map_chr pluck
+#' @importFrom jsonlite read_json
+#' @importFrom tibble tibble
+#' @importFrom stringr str_c str_replace_all str_to_sentence str_replace
 #' @export
 #' @examples
 #' \dontrun{
-#' api_url <- "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=NCT03146143%7CNCT00408044&fields=NCTId%7COrgStudyId%7CCondition%7CBriefTitle%7CAcronym%7COverallStatus%7CPrimaryCompletionDate%7CCompletionDate%7CResultsFirstSubmitDate%7CResultsFirstPostDate%7CLastUpdatePostDate%7CSeeAlsoLinkURL&pageSize=1000"
-#' df <- generate_NCT_DF(api_url)
+#' api_url <- "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=NCT03146143%7CNCT00408044"
+#' api_fields <- "&fields=NCTId%7COrgStudyId%7CCondition%7CBriefTitle%7CAcronym%7COverallStatus%7CPrimaryCompletionDate%7CCompletionDate%7CResultsFirstSubmitDate%7CResultsFirstPostDate%7CLastUpdatePostDate%7CSeeAlsoLinkURL&pageSize=1000"
+#' df <- generate_NCT_DF(c(api_url, api_fields))
 #' print(df)
 #' }
 generate_NCT_DF <- function(url) {
@@ -229,7 +226,7 @@ generate_NCT_DF <- function(url) {
                        "ResultsFirstPostDate" = resultsfirstpostdates,
                        "LastUpdatePostDate" = lastupdatepostdates,
                        "SeeAlsoLinkURL" = seealsolinks) |>
-    dplyr::arrange(desc(NCTId)) |>
+    dplyr::arrange(dplyr::desc(NCTId)) |>
     dplyr::mutate(Rank = dplyr::row_number(), .before = 1)
 
   return(df)
@@ -264,13 +261,16 @@ generate_ISRCTN_URL <- function(ISRCTN_Id_Vector) {
 #'
 #' @param ISRCTN_URL A character string specifying the URL to fetch the ISRCTN XML data.
 #' @return A tibble dataframe containing the ISRCTN trial data.
-#' @import httr2
-#' @import xml2
-#' @import tibble
+#' @importFrom httr2 request req_perform resp_body_xml
+#' @importFrom xml2 xml_text xml_find_all
+#' @importFrom tibble tibble
 #' @export
 #' @examples
-#' ISRCTN_URL <- "https://www.isrctn.com/api/query/format/who?q=ISRCTN27106947%20OR%20ISRCTN16033549%20OR%20ISRCTN17573805%20OR%20ISRCTN73327972%20OR%20ISRCTN32309003&limit=15"
-#' df <- generate_ISRCTN_df(ISRCTN_URL)
+#' \dontrun{
+#' ISRCTN_URL <- "https://www.isrctn.com/api/query/format/who?q="
+#' ISRCTN_query <- "ISRCTN27106947%20OR%20ISRCTN16033549%20OR%20ISRCTN17573805%20OR%20ISRCTN73327972&limit=15"
+#' df <- generate_ISRCTN_df(c(ISRCTN_URL, ISRCTN_query)
+#' }
 generate_ISRCTN_df <- function(ISRCTN_URL) {
 
   ISRCTN_XML <- httr2::request(ISRCTN_URL) |>
@@ -302,15 +302,15 @@ generate_ISRCTN_df <- function(ISRCTN_URL) {
 #' @param mindate The start date for the PubMed search. Defaults to yesterday's date.
 #' @param maxdate The end date for the PubMed search. Defaults to yesterday's date.
 #' @return None. The function updates the database with the PubMed results.
-#' @import DBI
-#' @import RSQLite
-#' @import readr
-#' @import stringr
-#' @import dplyr
+#' @importFrom DBI dbConnect
+#' @importFrom RSQLite SQLite
+#' @importFrom readr read_file
+#' @importFrom stringr str_subset
+#' @importFrom dplyr left_join select everything all_of distinct
 #' @export
 generate_pubmed_results_from_search_terms_and_update_db_one_registry <- function(registry,
                                                                                  trial_id_df,
-                                                                                 main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
+                                                                                 main_con = DBI::dbConnect(RSQLite::SQLite(), "inst/extdata/RSQLite_data/TrialTracker-db.sqlite"),
                                                                                  mindate = Sys.Date() - 1,
                                                                                  maxdate = Sys.Date() - 1) {
   api <- readr::read_file("secrets/entrez.key")
@@ -331,7 +331,7 @@ generate_pubmed_results_from_search_terms_and_update_db_one_registry <- function
     pm_tibble <- pm_tibble |>
       dplyr::left_join(trial_id_df, by = c("ID" = registry_id)) |>
       dplyr::select(Program, Guideline.number, dplyr::everything()) |>
-      dplyr::select(-all_of(registry_id_cols_to_remove)) |>
+      dplyr::select(-dplyr::all_of(registry_id_cols_to_remove)) |>
       dplyr::distinct()
 
     update_db(main_con, registry_db_pm_name, pm_tibble)
@@ -346,7 +346,7 @@ generate_pubmed_results_from_search_terms_and_update_db_one_registry <- function
 #' @param trial_id_df A dataframe containing trial IDs.
 #' @param main_con A database connection object.
 #' @return None. The function updates the PubMed tables in the database.
-#' @import purrr
+#' @importFrom purrr walk
 #' @export
 update_all_pubmed_tables <- function(registries = c("NCT", "ISRCTN", "NIHR", "EU"), trial_id_df, main_con) {
   purrr::walk(registries, generate_pubmed_results_from_search_terms_and_update_db_one_registry, trial_id_df = trial_id_df, main_con = main_con)
@@ -359,7 +359,7 @@ update_all_pubmed_tables <- function(registries = c("NCT", "ISRCTN", "NIHR", "EU
 #' @param main_con A database connection object.
 #' @param trial_id_df A dataframe containing trial IDs.
 #' @return None. The function updates the NCT registry data in the database.
-#' @import dplyr
+#' @importFrom dplyr bind_rows right_join filter mutate select distinct
 #' @export
 update_db_for_NCT_changes <- function(main_con,
                                       trial_id_df) {
@@ -400,7 +400,7 @@ update_db_for_NCT_changes <- function(main_con,
 #' @param main_con A database connection object.
 #' @param trial_id_df A dataframe containing trial IDs.
 #' @return None. The function updates the ISRCTN registry data in the database.
-#' @import dplyr
+#' @importFrom dplyr bind_rows right_join filter mutate select distinct
 #' @export
 update_db_for_ISRCTN_changes <- function(main_con,
                                          trial_id_df) {
@@ -436,8 +436,9 @@ update_db_for_ISRCTN_changes <- function(main_con,
 #' @param main_con A database connection object.
 #' @param trial_id_df A dataframe containing trial IDs.
 #' @return None. The function updates the NIHR registry data in the database.
-#' @import dplyr
-#' @import jsonlite
+#' @importFrom jsonlite fromJSON
+#' @importFrom tidyr drop_na
+#' @importFrom stringr str_replace_all
 #' @export
 update_db_for_NIHR_changes <- function(main_con,
                                        trial_id_df) {
@@ -457,7 +458,15 @@ update_db_for_NIHR_changes <- function(main_con,
     dplyr::right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") |>
     tidyr::drop_na(projectjoin) |>
     dplyr::mutate(Query_Date = Sys.Date()) |>
-    dplyr::select(Query_Date, Program, Guideline.number, URL, project_id, project_title, project_status, project_id, end_date) |>
+    dplyr::select(Query_Date,
+                  Program,
+                  Guideline.number,
+                  URL,
+                  project_id,
+                  project_title,
+                  project_status,
+                  project_id,
+                  end_date) |>
     dplyr::distinct()
 
   update_db(main_con, "NIHR", NIHR_DF)
@@ -470,9 +479,11 @@ update_db_for_NIHR_changes <- function(main_con,
 #' @param main_con A database connection object.
 #' @param trial_id_df A dataframe containing trial IDs.
 #' @return None. The function updates the EU registry data in the database.
-#' @import dplyr
-#' @import httr2
-#' @import ctrdata
+#' @importFrom dplyr mutate right_join filter select distinct rename
+#' @importFrom httr2 request req_options req_perform resp_status
+#' @importFrom ctrdata ctrLoadQueryIntoDb dbGetFieldsIntoDf dbFindFields
+#' @importFrom stringr str_subset str_extract
+#' @importFrom nodbi src_sqlite
 #' @export
 update_db_for_EU_changes <- function(main_con, trial_id_df) {
   #print("Inside update_db_for_EU_changes")
@@ -487,7 +498,7 @@ update_db_for_EU_changes <- function(main_con, trial_id_df) {
   )
 
   # Create a request object
-  req <- httr2::request(EU_URL) %>%
+  req <- httr2::request(EU_URL) |>
     httr2::req_options(ssl_verifypeer = FALSE)
 
   # Perform the request
@@ -499,7 +510,7 @@ update_db_for_EU_changes <- function(main_con, trial_id_df) {
   }
 
   # sqlite db
-  eu_temp_db <- nodbi::src_sqlite(dbname = "data/RSQLite_data/EU_temp_db.sqlite", collection = "EU")
+  eu_temp_db <- nodbi::src_sqlite(dbname = "inst/extdata/RSQLite_data/EU_temp_db.sqlite", collection = "EU")
 
   try(ctrdata::ctrLoadQueryIntoDb(queryterm = EU_URL, con = eu_temp_db))
 
@@ -538,14 +549,12 @@ update_db_for_EU_changes <- function(main_con, trial_id_df) {
 #'
 #' @param main_con A database connection object. Defaults to a connection to the TrialTracker SQLite database.
 #' @param trial_id_df A dataframe containing trial IDs. Defaults to reading from the Trial_IDs table in the database.
-#' @param db_connect_func A function for establishing a database connection (default: `DBI::dbConnect`).
-#' @param db_read_func A function for reading a table from the database (default: `DBI::dbReadTable`).
 #' @return None. The function updates the database for all registries.
-#' @import DBI
-#' @import RSQLite
+#' @importFrom DBI dbConnect dbReadTable
+#' @importFrom RSQLite SQLite
 #' @export
 download_trial_info_wrapper_no_pm_or_email <- function(
-    main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
+    main_con = DBI::dbConnect(RSQLite::SQLite(), "inst/extdata/RSQLite_data/TrialTracker-db.sqlite"),
     trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs")) {
 
   # Call update functions
@@ -564,10 +573,10 @@ download_trial_info_wrapper_no_pm_or_email <- function(
 #' @param trial_id_df A dataframe containing trial IDs. Defaults to reading from the Trial_IDs table in the database.
 #' @param dev_flag A development flag (logical TRUE / FALSE) toggling whether emails go to dev team only (TRUE) or dashboard users and dev team (FALSE).
 #' @return None. The function updates the database for all registries, updates PubMed tables, and sends email alerts.
-#' @import DBI
-#' @import RSQLite
+#' @importFrom DBI dbConnect dbReadTable
+#' @importFrom RSQLite SQLite
 #' @export
-download_trial_info_wrapper <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "data/RSQLite_data/TrialTracker-db.sqlite"),
+download_trial_info_wrapper <- function(main_con = DBI::dbConnect(RSQLite::SQLite(), "inst/extdata/RSQLite_data/TrialTracker-db.sqlite"),
                                         trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs"),
                                         dev_flag) {
   download_trial_info_wrapper_no_pm_or_email()

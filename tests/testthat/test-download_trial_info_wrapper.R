@@ -1,8 +1,7 @@
 library(testthat)
 library(mockery)
-library(tibble)
-library(DBI)
-library(RSQLite)
+loadNamespace("tibble")
+loadNamespace("RSQLite")
 
 test_that("download_trial_info_wrapper calls the correct functions with the correct arguments", {
   # Create mock functions

@@ -1,9 +1,5 @@
 library(testthat)
 library(mockery)
-library(emayili)
-library(readr)
-library(DBI)
-library(RSQLite)
 
 # Mock functions
 mock_generate_change_files_for_nct_isrctn_eu <- function(prog_regexes, programs, registry_tables, main_con, daily_path) {

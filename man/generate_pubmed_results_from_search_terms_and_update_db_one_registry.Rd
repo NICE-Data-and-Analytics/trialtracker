@@ -8,7 +8,7 @@ generate_pubmed_results_from_search_terms_and_update_db_one_registry(
   registry,
   trial_id_df,
   main_con = DBI::dbConnect(RSQLite::SQLite(),
-    "data/RSQLite_data/TrialTracker-db.sqlite"),
+    "inst/extdata/RSQLite_data/TrialTracker-db.sqlite"),
   mindate = Sys.Date() - 1,
   maxdate = Sys.Date() - 1
 )

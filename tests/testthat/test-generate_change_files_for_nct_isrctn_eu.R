@@ -1,7 +1,5 @@
 library(testthat)
 library(mockery)
-library(purrr)
-library(stringr)
 
 # Mock function
 mock_generate_change_files_for_all_programs_in_one_registry <- function(registry, main_con, group_cols, exclude_cols, prog_regexes, programs, daily_path) {

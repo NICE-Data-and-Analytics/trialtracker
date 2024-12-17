@@ -1,10 +1,5 @@
 library(testthat)
-library(dplyr)
-library(tidyr)
-library(purrr)
-library(jsonlite)
-library(tibble)
-library(stringr)
+loadNamespace("tibble")
 library(mockery)
 
 test_that("generate_NCT_DF works correctly", {

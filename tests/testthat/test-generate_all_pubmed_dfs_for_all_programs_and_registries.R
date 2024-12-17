@@ -1,6 +1,5 @@
 library(testthat)
 library(mockery)
-library(purrr)
 
 # Mock function
 mock_generate_all_pubmed_dfs_for_all_programs_one_registry <- function(registry, prog_regexes, programs, main_con) {

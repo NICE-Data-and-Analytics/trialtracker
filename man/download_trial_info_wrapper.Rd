@@ -6,7 +6,7 @@
 \usage{
 download_trial_info_wrapper(
   main_con = DBI::dbConnect(RSQLite::SQLite(),
-    "data/RSQLite_data/TrialTracker-db.sqlite"),
+    "inst/extdata/RSQLite_data/TrialTracker-db.sqlite"),
   trial_id_df = DBI::dbReadTable(main_con, "Trial_IDs"),
   dev_flag
 )

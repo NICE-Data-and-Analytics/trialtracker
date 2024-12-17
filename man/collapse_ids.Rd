@@ -19,7 +19,4 @@ A single string of concatenated IDs separated by the specified delimiter.
 \description{
 This internal function collapses IDs from a specified column in a dataframe into a single string, separated by a specified delimiter. It is used for constructing API URLs.
 }
-\examples{
-df <- data.frame(id = c("NCT1234567", "NCT987654321", NA, "NCT1234567"))
-collapse_ids(df, "id", ",")
-}
+\keyword{internal}

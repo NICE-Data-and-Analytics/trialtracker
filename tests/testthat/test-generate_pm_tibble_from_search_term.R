@@ -1,7 +1,5 @@
 library(testthat)
-library(tibble)
-library(dplyr)
-library(purrr)
+loadNamespace("tibble")
 library(mockery)
 
 test_that("generate_pm_tibble_from_search_term returns expected tibble", {

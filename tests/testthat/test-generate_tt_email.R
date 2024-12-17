@@ -1,6 +1,5 @@
 library(testthat)
-library(emayili)
-library(stringr)
+loadNamespace("stringr")
 
 test_that("generate_tt_email works correctly", {
 
@@ -10,11 +9,13 @@ test_that("generate_tt_email works correctly", {
   attachments <- dir(file.path(test_root, 'test_data'),
                      full.names = TRUE) |>
     stringr::str_subset("_COVID_")
+  devs <- readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv")
+  users <- readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv")
 
   # Create email (dev version)
   email <- generate_tt_email(program, attachments, dev_flag = TRUE,
-                             devs = readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv"),
-                             users = readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv"))
+                             devs = devs,
+                             users = users)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
@@ -36,8 +37,8 @@ test_that("generate_tt_email works correctly", {
   # Test without attachments (dev version)
   attachments <- NULL
   email <- generate_tt_email(program, attachments, dev_flag = TRUE,
-                             devs = readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv"),
-                             users = readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv"))
+                             devs = devs,
+                             users = users)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email,
@@ -61,7 +62,9 @@ test_that("generate_tt_email works correctly", {
                      full.names = TRUE) |>
     stringr::str_subset("_COVID_")
 
-  email <- generate_tt_email(program, attachments, dev_flag = FALSE)
+  email <- generate_tt_email(program, attachments, dev_flag = FALSE,
+                             devs = devs,
+                             users = users)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")
@@ -83,8 +86,8 @@ test_that("generate_tt_email works correctly", {
   # Check case of no attachments (live version)
   attachments <- NULL
   email <- generate_tt_email(program, attachments, dev_flag = FALSE,
-                             devs = readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv"),
-                             users = readLines("c:/RStudio_Projects/Trialtracker/secrets/users.csv"))
+                             devs = devs,
+                             users = users)
 
   # Check the 'from' field
   expect_equal(email$headers$From$values$email, "robert.willans@nice.org.uk")

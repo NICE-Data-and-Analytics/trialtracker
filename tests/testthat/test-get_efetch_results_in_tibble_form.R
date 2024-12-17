@@ -1,5 +1,5 @@
 library(testthat)
-library(tibble)
+loadNamespace("tibble")
 
 # Mocking the get_efetch_results function
 mock_get_efetch_results <- function(pmid, api_object) {
