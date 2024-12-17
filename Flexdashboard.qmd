@@ -1,11 +1,11 @@
 ---
 title: "TrialTracker Dashboard"
 format: 
-  dashboard: 
+  dashboard:
     includes:
       in-header: Secrets/GA_Script.html
     css: styles.css
-engine: shiny
+server: shiny
 brand: _brand.yml
 ---
 
@@ -13,12 +13,6 @@ brand: _brand.yml
 #| echo: false
 #| include: false
   
-knitr::opts_chunk$set(
-  echo = FALSE,
-  message = FALSE,
-  warning = FALSE
-)
-
 main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_Data", "TrialTracker-db.sqlite"))
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
 
@@ -631,7 +625,7 @@ if ("EU_PM" %in% DBI::dbListTables(main_con)) {
 There are two ways to add trials:
 
 1.  Add one at a time, choosing the relevant registry button, completing the guideline number, trial ID, and URL boxes, then pressing 'add trial'.
-2.  Add more than one trial at once by uploading a spreadsheet containing relevant details using the 'choose file' box.
+2.  Add more than one trial at once by uploading a spreadsheet containing relevant details using the 'choose file' box on the next tab.
 
 **Note that Trial ID reference number must be in the correct format. Eg:**
 
@@ -641,6 +635,8 @@ There are two ways to add trials:
 -   Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
 
 ```{r AddSingleTrial}
+#| context: server
+
 shiny::inputPanel(
   "Add Single Trial",
   shiny::radioButtons(
@@ -663,8 +659,10 @@ shiny::inputPanel(
   shiny::textInput("URL_add",
     label = "Paste URL to trial page in registry",
     placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750",
-    width = "200%"
+    width = "100%"
   ),
+  shiny::textOutput("add_sql_raw"),
+  shiny::textOutput("add_sql"),
   shiny::actionButton("button_add", "Add trial"),
   shiny::uiOutput("single_result")
 )
@@ -674,6 +672,7 @@ shiny::inputPanel(
 ### Add Multiple Trials
 
 ```{r AddMultiTrial}
+#| context: server
 
 shiny::inputPanel(
   "Add Multiple Trials via csv file",
@@ -697,6 +696,8 @@ Select relevant registry and trial ID reference number below, along with any com
 'Archiving' moves the trial information from the live lists to the relevant archived trials list, where it will no longer be updated. 'Deleting' will remove the trial from the live lists and information will not be stored
 
 ```{r Removetab}
+#| context: server
+
 shiny::inputPanel(
   shiny::radioButtons(
     "registry_remove",
@@ -712,6 +713,7 @@ shiny::inputPanel(
     label = "Select Trial ID reference number",
     choices = ""
   ),
+  shiny::textOutput("choices_list"),
   shiny::actionButton("button_delete", "Delete trial"),
   shiny::textInput("comments_archive", "Archive Comments"),
   shiny::actionButton("button_archive", "Archive trial")
@@ -729,6 +731,8 @@ shiny::mainPanel(
 Select trial and amend comments in the box below
 
 ```{r TrialComments}
+#| context: server
+
 shiny::inputPanel(
   shiny::radioButtons(
     "registry_comment",
@@ -762,6 +766,7 @@ shiny::mainPanel(
 ### ClinicalTrials.gov Archive
 
 ```{r CG.govarchive}
+
 DBI::dbReadTable(main_con, "NCT_rxv") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
@@ -793,6 +798,7 @@ DBI::dbReadTable(main_con, "NCT_rxv") |>
 ### ISRCTN Archive
 
 ```{r ISRCTNarchivetable}
+
 DBI::dbReadTable(main_con, "ISRCTN_rxv") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
@@ -822,6 +828,7 @@ DBI::dbReadTable(main_con, "ISRCTN_rxv") |>
 ### NIHR Archive
 
 ```{r NIHRarchivetable}
+
 DBI::dbReadTable(main_con, "NIHR_rxv") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
@@ -846,6 +853,7 @@ DBI::dbReadTable(main_con, "NIHR_rxv") |>
 ### EU Archive
 
 ```{r EUarchivetable}
+
 DBI::dbReadTable(main_con, "EU_rxv") |>
   dplyr::select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids) |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_UTF),
@@ -868,8 +876,7 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 :::
 
 ```{r ServerCode}
-
-server <- function(input, output, session) {
+#| context: server
 
 ### ADD SINGLE TRIAL
   
@@ -889,6 +896,10 @@ exp_add <- shiny::reactive({
     ID = stringr::str_trim(input$ID_add)
   )
 })
+
+# Render reactive to debug
+output$add_sql_raw <- shiny::renderText(exp_add)
+output$add_sql <- shiny::renderText(as.character(exp_add))
 
 # Single trial add logic
 shiny::observeEvent(input$button_add, {
@@ -937,12 +948,18 @@ output$downloadtemplate <- shiny::downloadHandler(
   }
 )
 
+# Reactive for multiple uploads
+to_add <- shiny::reactive({
+  inFile <- input$uploadtemplate
+  upload <- readr::read_csv(file = inFile$datapath, col_types = cols(.default = col_character()))
+})
+
 # Multiple upload logic
 shiny::observeEvent(input$uploadtemplate, {
-  NCT_check <- stringr::str_detect(replace_na(to_add()$NCT_Ids, ""), NCT_pattern)
-  EU_check <- stringr::str_detect(replace_na(to_add()$EU_Ids, ""), EU_pattern)
-  ISRCTN_check <- stringr::str_detect(replace_na(to_add()$ISRCTN_Ids, ""), ISRCTN_pattern)
-  NIHR_check <- stringr::str_detect(replace_na(to_add()$NIHR_Ids, ""), NIHR_pattern)
+  NCT_check <- stringr::str_detect(tidyr::replace_na(to_add()$NCT_Ids, ""), NCT_pattern)
+  EU_check <- stringr::str_detect(tidyr::replace_na(to_add()$EU_Ids, ""), EU_pattern)
+  ISRCTN_check <- stringr::str_detect(tidyr::replace_na(to_add()$ISRCTN_Ids, ""), ISRCTN_pattern)
+  NIHR_check <- stringr::str_detect(tidyr::replace_na(to_add()$NIHR_Ids, ""), NIHR_pattern)
   Valid_ID <- {
     NCT_check | EU_check | ISRCTN_check | NIHR_check
   }
@@ -975,10 +992,10 @@ shiny::observeEvent(input$uploadtemplate, {
   }
 })
 shiny::observeEvent(input$button_add_multi, {
-  NCT_check <- stringr::str_detect(replace_na(to_add()$NCT_Ids, ""), NCT_pattern)
-  EU_check <- stringr::str_detect(replace_na(to_add()$EU_Ids, ""), EU_pattern)
-  ISRCTN_check <- stringr::str_detect(replace_na(to_add()$ISRCTN_Ids, ""), ISRCTN_pattern)
-  NIHR_check <- stringr::str_detect(replace_na(to_add()$NIHR_Ids, ""), NIHR_pattern)
+  NCT_check <- stringr::str_detect(tidyr::replace_na(to_add()$NCT_Ids, ""), NCT_pattern)
+  EU_check <- stringr::str_detect(tidyr::replace_na(to_add()$EU_Ids, ""), EU_pattern)
+  ISRCTN_check <- stringr::str_detect(tidyr::replace_na(to_add()$ISRCTN_Ids, ""), ISRCTN_pattern)
+  NIHR_check <- stringr::str_detect(tidyr::replace_na(to_add()$NIHR_Ids, ""), NIHR_pattern)
   Valid_ID <- {
     NCT_check | EU_check | ISRCTN_check | NIHR_check
   }
@@ -1014,12 +1031,6 @@ shiny::observeEvent(input$button_add_multi, {
       )))
     })
   }
-})
-
-# Reactive for multiple uploads
-to_add <- shiny::reactive({
-  inFile <- input$uploadtemplate
-  upload <- readr::read_csv(file = inFile$datapath, col_types = cols(.default = col_character()))
 })
 
 #### REMOVE OR ARCHIVE TRIALS
@@ -1066,8 +1077,11 @@ shiny::observeEvent(input$registry_remove, {
     dplyr::select(ids = input$registry_remove) |>
     tidyr::drop_na() |>
     dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-"))
-
+  
   shiny::updateSelectInput(session, "ID_remove", choices = choices_list)
+  
+  output$choices_list <- shiny::renderText(choices_list)
+  
 })
 
 # SQL template for SQL archive select statement
@@ -1160,6 +1174,7 @@ output$fetch_comment_SQL <- shiny::renderText(pulled_comments())
 shiny::observeEvent(input$ID_comment, {
   updateTextAreaInput(session, "trial_comments", value = pulled_comments())
 })
+
 shiny::observeEvent(input$button_comment, {
   # Add spinner
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Amending Comments - please wait while the dashboard refreshes in background....")
@@ -1193,7 +1208,5 @@ shiny::observeEvent(input$button_comment, {
   # return some success message
   output$success_comment <- shiny::renderText("Comments Successfully Updated - please refresh dashboard to see updated comments")
 })
-
-}
 
 ```
