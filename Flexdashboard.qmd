@@ -13,6 +13,8 @@ brand: _brand.yml
 #| echo: false
 #| include: false
   
+#library(shiny)
+
 main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_Data", "TrialTracker-db.sqlite"))
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
 
@@ -36,6 +38,7 @@ NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-
 ## ClinicalTrials.gov
 
 ```{r CGTlive}
+
 # create added_dates
 NCT_dates <- DBI::dbReadTable(main_con, "NCT") |>
   dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = NCTId)
@@ -378,6 +381,7 @@ compareDF::compare_df(
 **Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
 ::: {.panel-tabset}
+
 ### ClinicalTrials.gov
 
 ```{r nochangeCTG}
@@ -635,10 +639,9 @@ There are two ways to add trials:
 -   Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
 
 ```{r AddSingleTrial}
-#| context: server
 
 shiny::inputPanel(
-  "Add Single Trial",
+  shiny::h3("Add Single Trial"),
   shiny::radioButtons(
     "registry_add",
     label = "",
@@ -649,44 +652,47 @@ shiny::inputPanel(
       "Clinicaltrials.eu" = "EU_Ids"
     )
   ),
-  shiny::selectInput("guideline_program_add",
+  shiny::selectInput(
+    "guideline_program_add",
     label = "Enter program description",
     choices = c("COVID", "IP", "Other"),
     selected = "COVID"
   ),
-  shiny::textInput("guideline_reference_add", label = "Enter guideline number(s)", placeholder = "e.g. CG179"),
-  shiny::textInput("ID_add", label = "Enter Trial ID reference number", placeholder = " e.g. NCT03597750"),
-  shiny::textInput("URL_add",
-    label = "Paste URL to trial page in registry",
-    placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750",
-    width = "100%"
+  shiny::textInput(
+    "guideline_reference_add",
+    label = "Enter guideline number(s)",
+    placeholder = "e.g. CG179"
   ),
-  shiny::textOutput("add_sql_raw"),
-  shiny::textOutput("add_sql"),
-  shiny::actionButton("button_add", "Add trial"),
-  shiny::uiOutput("single_result")
+  shiny::textInput("ID_add", label = "Enter Trial ID reference number", placeholder = " e.g. NCT03597750"),
+  shiny::textInput("URL_add", label = "Paste URL to trial page in registry", placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750"),
+  shiny::actionButton("button_add", "Add trial")
 )
+shiny::mainPanel(shiny::uiOutput("single_result"))
 
 ```
 
 ### Add Multiple Trials
 
 ```{r AddMultiTrial}
-#| context: server
 
 shiny::inputPanel(
-  "Add Multiple Trials via csv file",
+  shiny::h3("Add Multiple Trials via csv file"),
   shiny::downloadButton("downloadtemplate", label = "Download template"),
-  shiny::fileInput("uploadtemplate", label = "Upload completed template", multiple = FALSE, accept = ".csv"),
-  shiny::actionButton("button_add_multi", label = "Add trial spreadsheet"),
-  shiny::uiOutput("multi_result")
+  shiny::fileInput(
+    "uploadtemplate",
+    label = "Upload completed template",
+    multiple = FALSE,
+    accept = ".csv"
+  ),
+  shiny::actionButton("button_add_multi", label = "Add trial spreadsheet")
 )
-
 shiny::mainPanel(
+  shiny::uiOutput("multi_result"),
   shiny::textOutput("multi_error"),
   shiny::textOutput("multi_fail"),
   shiny::textOutput("multi_success")
 )
+
 ```
 
 ### Remove or Archive Trial
@@ -696,9 +702,9 @@ Select relevant registry and trial ID reference number below, along with any com
 'Archiving' moves the trial information from the live lists to the relevant archived trials list, where it will no longer be updated. 'Deleting' will remove the trial from the live lists and information will not be stored
 
 ```{r Removetab}
-#| context: server
 
 shiny::inputPanel(
+  shiny::h3("Remove or Archive Trial"),
   shiny::radioButtons(
     "registry_remove",
     label = "Registry",
@@ -709,20 +715,15 @@ shiny::inputPanel(
       "Clinicaltrials.eu" = "EU_Ids"
     )
   ),
-  shiny::selectInput("ID_remove",
-    label = "Select Trial ID reference number",
-    choices = ""
-  ),
-  shiny::textOutput("choices_list"),
+  shiny::selectInput("ID_remove", label = "Select Trial ID reference number", choices = ""),
+  #shiny::textOutput("choices_list"),
   shiny::actionButton("button_delete", "Delete trial"),
   shiny::textInput("comments_archive", "Archive Comments"),
   shiny::actionButton("button_archive", "Archive trial")
 )
 
-shiny::mainPanel(
-  shiny::textOutput("success_delete"),
-  shiny::textOutput("success_archive")
-)
+shiny::mainPanel(shiny::textOutput("success_delete"),
+                 shiny::textOutput("success_archive"))
 
 ```
 
@@ -731,9 +732,9 @@ shiny::mainPanel(
 Select trial and amend comments in the box below
 
 ```{r TrialComments}
-#| context: server
 
 shiny::inputPanel(
+  shiny::h3("Add/Amend Trial Comments"),
   shiny::radioButtons(
     "registry_comment",
     label = "Registry",
@@ -744,17 +745,17 @@ shiny::inputPanel(
       "Clinicaltrials.eu" = "EU_Ids"
     )
   ),
-  shiny::selectInput("ID_comment",
-    label = "Select Trial ID reference number",
-    choices = ""
+  shiny::selectInput("ID_comment", label = "Select Trial ID reference number", choices = ""),
+  shiny::textAreaInput(
+    "trial_comments",
+    label = "Comments",
+    placeholder = "Trial Comments",
+    resize = "both"
   ),
-  shiny::textAreaInput("trial_comments", label = "Comments", placeholder = "Trial Comments", resize = "both"),
   shiny::actionButton("button_comment", "Amend Comments")
 )
 
-shiny::mainPanel(
-  shiny::textOutput("success_comment")
-)
+shiny::mainPanel(shiny::textOutput("success_comment"))
 
 ```
 :::
@@ -897,10 +898,6 @@ exp_add <- shiny::reactive({
   )
 })
 
-# Render reactive to debug
-output$add_sql_raw <- shiny::renderText(exp_add)
-output$add_sql <- shiny::renderText(as.character(exp_add))
-
 # Single trial add logic
 shiny::observeEvent(input$button_add, {
   valid_id_check <- stringr::str_detect(input$ID_add, paste(c(NCT_pattern, EU_pattern, ISRCTN_pattern, NIHR_pattern), collapse = "|"))
@@ -914,14 +911,14 @@ shiny::observeEvent(input$button_add, {
 
     shinybusy::remove_modal_spinner()
 
-    output$single_result <- shiny::renderText({
+    output$single_result <- shiny::renderUI({
       shiny::HTML(as.character(div(
         style = "color: green;",
         "Trial Added! - please refresh browser to see trial details on Live Trial Info tab"
       )))
     })
   } else if (!valid_id_check) {
-    output$single_result <- shiny::renderText({
+    output$single_result <- shiny::renderUI({
       shiny::HTML(as.character(div(
         style = "color: red;",
         "Error - Invalid trial ID reference number, please check ID against the above approved formats"
@@ -940,7 +937,7 @@ output$downloadtemplate <- shiny::downloadHandler(
   content = function(file) {
     readr::write_csv(
       readr::read_csv("trialuploadtemplate.csv",
-        col_types = cols(.default = col_character())
+        col_types = readr::cols(.default = readr::col_character())
       ),
       file,
       na = ""
@@ -1076,7 +1073,8 @@ shiny::observeEvent(input$registry_remove, {
   choices_list <- DBI::dbReadTable(main_con, "Trial_Ids") |>
     dplyr::select(ids = input$registry_remove) |>
     tidyr::drop_na() |>
-    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-"))
+    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-")) |> 
+    dplyr::pull(ids)
   
   shiny::updateSelectInput(session, "ID_remove", choices = choices_list)
   
@@ -1138,7 +1136,8 @@ shiny::observeEvent(input$registry_comment, {
   choices_list <- DBI::dbReadTable(main_con, "Trial_Ids") |>
     dplyr::select(ids = input$registry_comment) |>
     tidyr::drop_na() |>
-    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-"))
+    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-")) |> 
+    dplyr::pull(ids)
 
   shiny::updateSelectInput(session, "ID_comment", choices = choices_list)
 })

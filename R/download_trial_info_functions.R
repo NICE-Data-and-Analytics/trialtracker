@@ -166,72 +166,91 @@ generate_NCT_URL <- function(NCT_ID_Vec) {
 #' print(df)
 #' }
 generate_NCT_DF <- function(url) {
+  tryCatch({
+    df_resp <- url |>
+      jsonlite::read_json()
 
-  df_resp <- url |>
-    jsonlite::read_json()
+    studies <- df_resp$studies
 
-  studies <- df_resp$studies
-
-  ncts <- purrr::map_chr(studies,
-                         \(x) purrr::pluck(x, "protocolSection", "identificationModule", "nctId", .default = NA)
-                         )
-  orgstudyid <- purrr::map_chr(studies,
-                               \(x) purrr::pluck(x, "protocolSection", "identificationModule", "orgStudyIdInfo", "id",
-                                                 .default = NA))
-  conditions <- purrr::map_chr(studies,
-                               \(x) purrr::pluck(x, "protocolSection", "conditionsModule", "conditions") |>
-                                 stringr::str_c(collapse = "|") |>
-                                 dplyr::na_if("")
-  )
-  briefTitles <- purrr::map_chr(studies,
-                                \(x) purrr::pluck(x, "protocolSection", "identificationModule", "briefTitle", .default = NA))
-  acronyms <- purrr::map_chr(studies,
-                             \(x) purrr::pluck(x, "protocolSection", "identificationModule", "acronym", .default = NA))
-  overallstatuses <- purrr::map_chr(studies,
-                                    \(x) purrr::pluck(x, "protocolSection", "statusModule", "overallStatus", .default = NA) |>
-                                      stringr::str_replace_all("_", " ") |>
-                                      stringr::str_to_sentence() |>
-                                      stringr::str_replace("Active not recruiting", "Active, not recruiting") |>
-                                      stringr::str_replace("Unknown", "Unknown status")
-  )
-  primarycompletiondates <- purrr::map_chr(studies,
-                                           \(x) purrr::pluck(x, "protocolSection", "statusModule",
-                                                             "primaryCompletionDateStruct", "date", .default = NA))
-  completiondates <- purrr::map_chr(studies,
-                                    \(x) purrr::pluck(x, "protocolSection", "statusModule",
-                                                      "completionDateStruct", "date", .default = NA))
-  resultsfirstsubmitdates <- purrr::map_chr(studies,
+    ncts <- purrr::map_chr(studies,
+                           \(x) purrr::pluck(x, "protocolSection", "identificationModule", "nctId", .default = NA)
+    )
+    orgstudyid <- purrr::map_chr(studies,
+                                 \(x) purrr::pluck(x, "protocolSection", "identificationModule", "orgStudyIdInfo", "id",
+                                                   .default = NA))
+    conditions <- purrr::map_chr(studies,
+                                 \(x) purrr::pluck(x, "protocolSection", "conditionsModule", "conditions") |>
+                                   stringr::str_c(collapse = "|") |>
+                                   dplyr::na_if("")
+    )
+    briefTitles <- purrr::map_chr(studies,
+                                  \(x) purrr::pluck(x, "protocolSection", "identificationModule", "briefTitle", .default = NA))
+    acronyms <- purrr::map_chr(studies,
+                               \(x) purrr::pluck(x, "protocolSection", "identificationModule", "acronym", .default = NA))
+    overallstatuses <- purrr::map_chr(studies,
+                                      \(x) purrr::pluck(x, "protocolSection", "statusModule", "overallStatus", .default = NA) |>
+                                        stringr::str_replace_all("_", " ") |>
+                                        stringr::str_to_sentence() |>
+                                        stringr::str_replace("Active not recruiting", "Active, not recruiting") |>
+                                        stringr::str_replace("Unknown", "Unknown status")
+    )
+    primarycompletiondates <- purrr::map_chr(studies,
+                                             \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                               "primaryCompletionDateStruct", "date", .default = NA))
+    completiondates <- purrr::map_chr(studies,
+                                      \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                        "completionDateStruct", "date", .default = NA))
+    resultsfirstsubmitdates <- purrr::map_chr(studies,
+                                              \(x) purrr::pluck(x, "protocolSection", "statusModule",
+                                                                "resultsFirstSubmitDate", .default = NA))
+    resultsfirstpostdates <- purrr::map_chr(studies,
                                             \(x) purrr::pluck(x, "protocolSection", "statusModule",
-                                                              "resultsFirstSubmitDate", .default = NA))
-  resultsfirstpostdates <- purrr::map_chr(studies,
+                                                              "resultsFirstPostDateStruct", "date", .default = NA))
+    lastupdatepostdates <- purrr::map_chr(studies,
                                           \(x) purrr::pluck(x, "protocolSection", "statusModule",
-                                                            "resultsFirstPostDateStruct", "date", .default = NA))
-  lastupdatepostdates <- purrr::map_chr(studies,
-                                        \(x) purrr::pluck(x, "protocolSection", "statusModule",
-                                                          "lastUpdatePostDateStruct", "date", .default = NA))
+                                                            "lastUpdatePostDateStruct", "date", .default = NA))
 
-  seealsolinks <- purrr::map_chr(studies,
-                                 \(x) purrr::pluck(x, "protocolSection", "referencesModule", "seeAlsoLinks", 1, "url",
-                                                   .default = NA) |> stringr::str_c(collapse = "|"))
+    seealsolinks <- purrr::map_chr(studies,
+                                   \(x) purrr::pluck(x, "protocolSection", "referencesModule", "seeAlsoLinks", 1, "url",
+                                                     .default = NA) |> stringr::str_c(collapse = "|"))
 
-  df <- tibble::tibble("NCTId" = ncts,
-                       "OrgStudyId" = orgstudyid,
-                       "Condition" = conditions,
-                       "BriefTitle" = briefTitles,
-                       "Acronym" = acronyms,
-                       "OverallStatus" = overallstatuses,
-                       "PrimaryCompletionDate" = primarycompletiondates,
-                       "CompletionDate" = completiondates,
-                       "ResultsFirstSubmitDate" = resultsfirstsubmitdates,
-                       "ResultsFirstPostDate" = resultsfirstpostdates,
-                       "LastUpdatePostDate" = lastupdatepostdates,
-                       "SeeAlsoLinkURL" = seealsolinks) |>
-    dplyr::arrange(dplyr::desc(NCTId)) |>
-    dplyr::mutate(Rank = dplyr::row_number(), .before = 1)
+    df <- tibble::tibble("NCTId" = ncts,
+                         "OrgStudyId" = orgstudyid,
+                         "Condition" = conditions,
+                         "BriefTitle" = briefTitles,
+                         "Acronym" = acronyms,
+                         "OverallStatus" = overallstatuses,
+                         "PrimaryCompletionDate" = primarycompletiondates,
+                         "CompletionDate" = completiondates,
+                         "ResultsFirstSubmitDate" = resultsfirstsubmitdates,
+                         "ResultsFirstPostDate" = resultsfirstpostdates,
+                         "LastUpdatePostDate" = lastupdatepostdates,
+                         "SeeAlsoLinkURL" = seealsolinks) |>
+      dplyr::arrange(dplyr::desc(NCTId)) |>
+      dplyr::mutate(Rank = dplyr::row_number(), .before = 1)
 
-  return(df)
-
+    return(df)
+  }, error = function(e) {
+    message("Error fetching data from ClinicalTrials.gov API: ", e$message)
+    # Return an empty tibble with the same structure
+    tibble::tibble(
+      "NCTId" = character(),
+      "OrgStudyId" = character(),
+      "Condition" = character(),
+      "BriefTitle" = character(),
+      "Acronym" = character(),
+      "OverallStatus" = character(),
+      "PrimaryCompletionDate" = character(),
+      "CompletionDate" = character(),
+      "ResultsFirstSubmitDate" = character(),
+      "ResultsFirstPostDate" = character(),
+      "LastUpdatePostDate" = character(),
+      "SeeAlsoLinkURL" = character(),
+      "Rank" = integer()
+    )
+  })
 }
+
 #' Generate ISRCTN API URL
 #'
 #' This function creates a URL for an ISRCTN API call using a vector of ISRCTN trial IDs.
@@ -272,24 +291,41 @@ generate_ISRCTN_URL <- function(ISRCTN_Id_Vector) {
 #' df <- generate_ISRCTN_df(c(ISRCTN_URL, ISRCTN_query)
 #' }
 generate_ISRCTN_df <- function(ISRCTN_URL) {
+  tryCatch({
+    ISRCTN_XML <- httr2::request(ISRCTN_URL) |>
+      httr2::req_perform() |>
+      httr2::resp_body_xml()
 
-  ISRCTN_XML <- httr2::request(ISRCTN_URL) |>
-    httr2::req_perform() |>
-    httr2::resp_body_xml()
-
-  tibble::tibble(
-    "ISRCTN_No" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//trial_id")),
-    "Public_Title" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//public_title")),
-    "Acronym" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//acronym")),
-    "Scientific_Title" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//scientific_title")),
-    "URL" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//url")),
-    "Recruitment_Status" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//recruitment_status")),
-    "Results_date_completed" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_date_completed")),
-    "Results_url_link" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_url_link")),
-    "Results_summary" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_summary")),
-    "Results_date_posted" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_date_posted")),
-    "Results_date_first_publication" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_date_first_publication"))
-  )
+    tibble::tibble(
+      "ISRCTN_No" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//trial_id")),
+      "Public_Title" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//public_title")),
+      "Acronym" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//acronym")),
+      "Scientific_Title" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//scientific_title")),
+      "URL" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//url")),
+      "Recruitment_Status" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//recruitment_status")),
+      "Results_date_completed" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_date_completed")),
+      "Results_url_link" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_url_link")),
+      "Results_summary" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_summary")),
+      "Results_date_posted" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_date_posted")),
+      "Results_date_first_publication" = xml2::xml_text(xml2::xml_find_all(ISRCTN_XML, ".//results_date_first_publication"))
+    )
+  }, error = function(e) {
+    message("Error fetching data from ISRCTN API: ", e$message)
+    # Return an empty tibble with the same structure
+    tibble::tibble(
+      "ISRCTN_No" = character(),
+      "Public_Title" = character(),
+      "Acronym" = character(),
+      "Scientific_Title" = character(),
+      "URL" = character(),
+      "Recruitment_Status" = character(),
+      "Results_date_completed" = character(),
+      "Results_url_link" = character(),
+      "Results_summary" = character(),
+      "Results_date_posted" = character(),
+      "Results_date_first_publication" = character()
+    )
+  })
 }
 
 #' Update PubMed Tables for One Registry
@@ -440,36 +476,43 @@ update_db_for_ISRCTN_changes <- function(main_con,
 #' @importFrom tidyr drop_na
 #' @importFrom stringr str_replace_all
 #' @export
-update_db_for_NIHR_changes <- function(main_con,
-                                       trial_id_df) {
-  # Construct URL
-  NIHR_URL_API2 <-
-    "https://nihr.opendatasoft.com/api/v2/catalog/datasets/infonihr-open-dataset/exports/json?limit=-1&offset=0&lang=en&timezone=UTC"
+update_db_for_NIHR_changes <- function(main_con, trial_id_df) {
+  tryCatch({
+    # Construct URL
+    NIHR_URL_API2 <- "https://nihr.opendatasoft.com/api/v2/catalog/datasets/infonihr-open-dataset/exports/json?limit=-1&offset=0&lang=en&timezone=UTC"
 
-  NIHR_json <- jsonlite::fromJSON(url(NIHR_URL_API2))
+    # Fetch JSON data from the API
+    NIHR_json <- jsonlite::fromJSON(url(NIHR_URL_API2))
 
-  NIHR_Trial_IDs <- trial_id_df |>
-    dplyr::select(Program, Guideline.number, URL, NIHR_Ids) |>
-    tidyr::drop_na(NIHR_Ids) |>
-    dplyr::mutate("projectjoin" = stringr::str_replace_all(NIHR_Ids, "[^\\d]", ""))
+    # Process trial IDs
+    NIHR_Trial_IDs <- trial_id_df %>%
+      dplyr::select(Program, Guideline.number, URL, NIHR_Ids) %>%
+      tidyr::drop_na(NIHR_Ids) %>%
+      dplyr::mutate("projectjoin" = stringr::str_replace_all(NIHR_Ids, "[^\\d]", ""))
 
-  NIHR_DF <- NIHR_json |>
-    dplyr::mutate("projectjoin" = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
-    dplyr::right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") |>
-    tidyr::drop_na(projectjoin) |>
-    dplyr::mutate(Query_Date = Sys.Date()) |>
-    dplyr::select(Query_Date,
-                  Program,
-                  Guideline.number,
-                  URL,
-                  project_id,
-                  project_title,
-                  project_status,
-                  project_id,
-                  end_date) |>
-    dplyr::distinct()
+    # Process NIHR data and join with trial IDs
+    NIHR_DF <- NIHR_json %>%
+      dplyr::mutate("projectjoin" = stringr::str_replace_all(project_id, "[^\\d]", "")) %>%
+      dplyr::right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") %>%
+      tidyr::drop_na(projectjoin) %>%
+      dplyr::mutate(Query_Date = Sys.Date()) %>%
+      dplyr::select(Query_Date,
+                    Program,
+                    Guideline.number,
+                    URL,
+                    project_id,
+                    project_title,
+                    project_status,
+                    project_id,
+                    end_date) %>%
+      dplyr::distinct()
 
-  update_db(main_con, "NIHR", NIHR_DF)
+    # Update the database
+    update_db(main_con, "NIHR", NIHR_DF)
+  }, error = function(e) {
+    # Handle the error
+    message("Error fetching data from NIHR API: ", e$message)
+  })
 }
 
 #' Update Database for EU Registry Changes
