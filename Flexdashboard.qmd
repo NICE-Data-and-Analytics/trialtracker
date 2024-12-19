@@ -33,6 +33,7 @@ NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-
 
 **Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
+<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ## ClinicalTrials.gov
@@ -69,7 +70,7 @@ DBI::dbReadTable(main_con, "NCT") |>
   dplyr::arrange(desc(`Date Added`), Program, Guideline, `NCT ID`) |>
   dplyr::distinct() |>
   DT::datatable(
-    options = list(bPaginate = FALSE, scrollY = TRUE),
+    options = list(bPaginate = FALSE, scrollY = "70vh"),
     filter = "top"
   )
 ```
@@ -102,6 +103,7 @@ DBI::dbReadTable(main_con, "ISRCTN") |>
     `Results URL` = Results_url_link,
     `Results summary` = Results_summary
   ) |>
+  dplyr::select(Program, Guideline, `Date Added`, URL, `ISRCTN ID`, Title, Acronym, `Scientific Title`, `Recruitment Status`, `Results URL`, `Results summary`, `Results completed date`, `Results posted date`, `Results published date`, Comments) |> 
   dplyr::arrange(desc(`Date Added`), Program, Guideline, `ISRCTN ID`) |>
   DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
@@ -167,12 +169,14 @@ DBI::dbReadTable(main_con, "EU") |>
 ```
 
 :::
+</div>
 
 # Recent Status Changes
 
 **Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**\
 **Changes are from 31 days ago**
 
+<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov
@@ -374,12 +378,15 @@ compareDF::compare_df(
   dplyr::distinct() |>
   DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
+
 :::
+</div>
 
 # No Changes in Last 6m
 
 **Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
+<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov
@@ -508,11 +515,13 @@ dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], ke
   DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 :::
+</div>
 
 # Pubmed Publications
 
 **Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
+<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov
@@ -619,9 +628,11 @@ if ("EU_PM" %in% DBI::dbListTables(main_con)) {
 ```
 
 :::
+</div>
 
 # Add/Remove Trials and Trial Comments
 
+<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### Add Trial
@@ -759,9 +770,11 @@ shiny::mainPanel(shiny::textOutput("success_comment"))
 
 ```
 :::
+</div>
 
 # Archived Trials
 
+<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov Archive
@@ -875,6 +888,7 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 ```
 
 :::
+</div>
 
 ```{r ServerCode}
 #| context: server
