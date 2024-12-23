@@ -730,7 +730,8 @@ shiny::inputPanel(
   #shiny::textOutput("choices_list"),
   shiny::actionButton("button_delete", "Delete trial"),
   shiny::textInput("comments_archive", "Archive Comments"),
-  shiny::actionButton("button_archive", "Archive trial")
+  shiny::actionButton("button_archive", "Archive trial"),
+  shiny::downloadButton("button_download_dbs", label = "Download SQLite data")
 )
 
 shiny::mainPanel(shiny::textOutput("success_delete"),
@@ -1220,6 +1221,26 @@ shiny::observeEvent(input$button_comment, {
 
   # return some success message
   output$success_comment <- shiny::renderText("Comments Successfully Updated - please refresh dashboard to see updated comments")
-})
+  })
+
+# Server code for 'download SQLite databases' button
+  
+# Function to allow downloading of files
+output$button_download_dbs <- shiny::downloadHandler(
+  filename = function() {
+    paste0("databases-", Sys.Date(), ".zip")
+  },
+  content = function(file) {
+    # Create the zip file
+    zip::zipr(
+      file,
+      files = c("Trialtracker-db.sqlite", "EU_temp_db.sqlite"),
+      root = "inst\\extdata\\RSQLite_data\\",
+      recurse = FALSE,
+      include_directories = FALSE
+    )
+  }
+)
+
 
 ```
