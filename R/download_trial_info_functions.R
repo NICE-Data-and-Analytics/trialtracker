@@ -606,6 +606,9 @@ download_trial_info_wrapper_no_pm_or_email <- function(
   update_db_for_NIHR_changes(main_con = main_con, trial_id_df = trial_id_df)
   update_db_for_EU_changes(main_con = main_con, trial_id_df = trial_id_df)
 
+    # Re-render the Quarto file
+  quarto::quarto_render("index.qmd")
+
 }
 
 #' Wrapper Function for All Updates
@@ -625,4 +628,8 @@ download_trial_info_wrapper <- function(main_con = DBI::dbConnect(RSQLite::SQLit
   download_trial_info_wrapper_no_pm_or_email()
   update_all_pubmed_tables(main_con = main_con, trial_id_df = trial_id_df)
   generate_email_alerts(dev_flag = dev_flag)
+
+  # Re-render the Quarto file
+  quarto::quarto_render("index.qmd")
+
 }
