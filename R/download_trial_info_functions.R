@@ -1,3 +1,14 @@
+#' Clean UTF strings
+#'
+#' This internal function cleans UTF-8 strings
+#'
+#' @param x A string to be cleaned
+#' @return A cleaned string
+#' @keywords internal
+clean_UTF <- function(x) {
+  iconv(x, "UTF-8", "UTF-8", sub = "")
+}
+
 #' Concatenate Trial IDs for API URL Construction
 #'
 #' This internal function concatenates Trial IDs from a specified column in a dataframe, ensuring no missing or duplicate values. It is used for constructing API URLs.
@@ -33,6 +44,7 @@ concat_ids <- function(df, id_col) {
     )
   }
 }
+
 #' Collapse IDs for API URL Construction
 #'
 #' This internal function collapses IDs from a specified column in a dataframe into a single string, separated by a specified delimiter. It is used for constructing API URLs.

@@ -10,18 +10,12 @@ server: shiny
 brand: _brand.yml
 ---
 
-```{r setup}
+```{r setup, context = "server"}
 #| echo: false
 #| include: false
-  
-#library(shiny)
 
 main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite"))
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
-
-clean_UTF <- function(x) {
-  iconv(x, "UTF-8", "UTF-8", sub = "")
-}
 
 # Regex patterns
 NCT_pattern <- "NCT[0-9]{8}"
@@ -40,133 +34,25 @@ NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-
 ## ClinicalTrials.gov
 
 ```{r CGTlive}
-
-# create added_dates
-NCT_dates <- DBI::dbReadTable(main_con, "NCT") |>
-  dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = NCTId)
-
-DBI::dbReadTable(main_con, "NCT") |>
-  dplyr::filter(NCTId %in% trial_id_df$NCT_Ids) |>
-  dplyr::left_join(NCT_dates) |> # Add date added field
-  dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
-  dplyr::select(-Query_Date, -SeeAlsoLinkURL) |>
-  dplyr::select(Program, Guideline.number, `Date Added`, everything()) |> # reorder
-  dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
-  dplyr::mutate(across(
-    c(PrimaryCompletionDate:LastUpdatePostDate),
-    \(x) lubridate::as_date(lubridate::parse_date_time(x, c("ymd", "bdy"), truncated = 1L))
-  )) |>
-  dplyr::rename(
-    Guideline = Guideline.number,
-    `NCT ID` = NCTId,
-    `Org Study ID` = OrgStudyId,
-    Title = BriefTitle,
-    Status = OverallStatus,
-    `Primary Completion Date` = PrimaryCompletionDate,
-    `Completion Date` = CompletionDate,
-    `Results Submit Date` = ResultsFirstSubmitDate,
-    `Results Post Date` = ResultsFirstPostDate,
-    `Last Update` = LastUpdatePostDate
-  ) |>
-  dplyr::arrange(desc(`Date Added`), Program, Guideline, `NCT ID`) |>
-  dplyr::distinct() |>
-  DT::datatable(
-    options = list(bPaginate = FALSE, scrollY = "70vh"),
-    filter = "top"
-  )
+DT::dataTableOutput("live_trial_table_nct")
 ```
 
 ## ISRCTN
 
 ```{r ISCTNlive}
-# create added_dates
-ISRCTN_dates <- DBI::dbReadTable(main_con, "ISRCTN") |>
-  dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = ISRCTN_No)
-
-DBI::dbReadTable(main_con, "ISRCTN") |>
-  dplyr::filter(ISRCTN_No %in% trial_id_df$ISRCTN_Ids) |>
-  dplyr::left_join(ISRCTN_dates) |>
-  dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
-  dplyr::select(-Query_Date) |>
-  dplyr::select(Program, Guideline.number, `Date Added`, everything()) |> # reorder
-  dplyr::mutate(across(.cols = everything(), .fns = clean_UTF),
-    `Results completed date` = lubridate::dmy(Results_date_completed),
-    `Results posted date` = lubridate::dmy(Results_date_posted),
-    `Results published date` = lubridate::dmy(Results_date_first_publication)
-  ) |>
-  dplyr::distinct() |>
-  dplyr::rename(
-    Guideline = Guideline.number,
-    `ISRCTN ID` = ISRCTN_No,
-    Title = Public_Title,
-    `Scientific Title` = Scientific_Title,
-    `Recruitment Status` = Recruitment_Status,
-    `Results URL` = Results_url_link,
-    `Results summary` = Results_summary
-  ) |>
-  dplyr::select(Program, Guideline, `Date Added`, URL, `ISRCTN ID`, Title, Acronym, `Scientific Title`, `Recruitment Status`, `Results URL`, `Results summary`, `Results completed date`, `Results posted date`, `Results published date`, Comments) |> 
-  dplyr::arrange(desc(`Date Added`), Program, Guideline, `ISRCTN ID`) |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+DT::dataTableOutput("live_trial_table_isrctn")
 ```
 
 ## NIHR
 
 ```{r NIHRlive}
-# create added_dates
-NIHR_dates <- DBI::dbReadTable(main_con, "NIHR") |>
-  dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = project_id)
-
-DBI::dbReadTable(main_con, "NIHR") |>
-  dplyr::mutate(project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
-  dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
-  dplyr::select(-project_id_filter) |>
-  dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
-  dplyr::select(-Query_Date) |>
-  dplyr::left_join(NIHR_dates) |>
-  dplyr::select(Program, Guideline.number, `Date Added`, everything()) |> # reorder
-  dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
-  dplyr::rename(
-    Guideline = Guideline.number,
-    `NIHR ID` = project_id,
-    `Project Title` = project_title,
-    Status = project_status,
-    `End Date` = end_date
-  ) |>
-  dplyr::arrange(desc(`Date Added`), Program, Guideline, `NIHR ID`) |>
-  dplyr::distinct() |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+DT::dataTableOutput("live_trial_table_nihr")
 ```
 
 ## Clinicaltrials.eu
 
 ```{r EUlive}
-
-# create added_dates
-EU_dates <- DBI::dbReadTable(main_con, "EU") |>
-  dplyr::summarise("Date Added" = lubridate::as_date(min(Query_Date - 1L)), .by = EU_Ids)
-
-DBI::dbReadTable(main_con, "EU") |>
-  dplyr::mutate(short_id = stringr::str_sub(`X_id`, 1L, 14L)) |>
-  dplyr::filter(short_id %in% trial_id_df$EU_Ids) |>
-  dplyr::left_join(EU_dates) |>
-  dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
-  dplyr::select(
-    -Query_Date, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids, -short_id
-  ) |>
-  dplyr::select(Program, Guideline.number, `Date Added`, everything()) |> # reorder
-  dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
-  dplyr::rename(
-    Guideline = Guideline.number,
-    `Clinicaltrials.eu ID` = `X_id`,
-    `End of Trial Status` = p_end_of_trial_status,
-    Title = a3_full_title_of_the_trial,
-    `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
-    `Sponsor ID` = a41_sponsors_protocol_code_number
-  ) |>
-  dplyr::arrange(desc(`Date Added`), Program, Guideline, `Clinicaltrials.eu ID`) |>
-  dplyr::distinct() |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-
+DT::dataTableOutput("live_trial_table_eu")
 ```
 
 :::
@@ -268,6 +154,10 @@ old_df <- DBI::dbReadTable(main_con, "ISRCTN") |>
     ISRCTN_No %in% trial_id_df$ISRCTN_Ids
   ) |>
   dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
+
+# Create 'Date Added' summary
+ISRCTN_dates <- DBI::dbReadTable(main_con, "ISRCTN") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = ISRCTN_No)
 
 compareDF::compare_df(new_df,
   old_df,
@@ -394,11 +284,15 @@ compareDF::compare_df(
 ### ClinicalTrials.gov
 
 ```{r nochangeCTG}
+
 current <- DBI::dbReadTable(main_con, "NCT") |>
   dplyr::filter(Query_Date == lubridate::as_date(max(Query_Date)))
 
 old <- DBI::dbReadTable(main_con, "NCT") |>
   dplyr::filter(Query_Date == (lubridate::as_date(max(Query_Date)) - months(6L)))
+
+NCT_dates <- DBI::dbReadTable(main_con, "NCT") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = NCTId)
 
 dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], keep = FALSE) |>
   dplyr::select(-contains(".x")) |>
@@ -436,6 +330,10 @@ current <- DBI::dbReadTable(main_con, "ISRCTN") |>
 old <- DBI::dbReadTable(main_con, "ISRCTN") |>
   dplyr::filter(Query_Date == (lubridate::as_date(max(Query_Date)) - months(6L)))
 
+  # Create 'Date Added' summary
+  ISRCTN_dates <- DBI::dbReadTable(main_con, "ISRCTN") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = ISRCTN_No)
+
 dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], keep = FALSE) |>
   dplyr::select(-contains(".x")) |>
   dplyr::select(-contains(".y")) |>
@@ -471,6 +369,10 @@ current <- DBI::dbReadTable(main_con, "NIHR") |>
 old <- DBI::dbReadTable(main_con, "NIHR") |>
   dplyr::filter(Query_Date == (lubridate::as_date(max(Query_Date)) - months(6L)))
 
+  # Create 'Date Added' summary
+  NIHR_dates <- DBI::dbReadTable(main_con, "NIHR") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = project_id)
+
 dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], keep = FALSE) |>
   dplyr::select(-contains(".x")) |>
   dplyr::select(-contains(".y")) |>
@@ -496,6 +398,10 @@ current <- DBI::dbReadTable(main_con, "EU") |>
 
 old <- DBI::dbReadTable(main_con, "EU") |>
   dplyr::filter(Query_Date == (lubridate::as_date(max(Query_Date)) - months(6L)))
+
+# Create 'Date Added' summary
+  EU_dates <- DBI::dbReadTable(main_con, "EU") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = EU_Ids)
 
 dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], keep = FALSE) |>
   dplyr::select(-contains(".x")) |>
@@ -772,12 +678,15 @@ shiny::inputPanel(
 shiny::mainPanel(shiny::textOutput("success_comment"))
 
 ```
+
 :::
+
 </div>
 
 # Archived Trials
 
 <div style="height: 80vh;">
+
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov Archive
@@ -891,10 +800,10 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 ```
 
 :::
+
 </div>
 
-```{r ServerCode}
-#| context: server
+```{r ServerCodeUpdates, context = "server"}
 
 ### ADD SINGLE TRIAL
   
@@ -1244,5 +1153,181 @@ output$button_download_dbs <- shiny::downloadHandler(
   }
 )
 
+
+```
+
+```{r ServerLiveTrialInfo, context = "server"}
+
+nct_data <- shiny::reactiveVal()
+isrctn_data <- shiny::reactiveVal()
+eu_data <- shiny::reactiveVal()
+nihr_data <- shiny::reactiveVal()
+
+
+load_all_trial_data <- function() {
+ nct_data(DBI::dbReadTable(main_con, "NCT"))
+ isrctn_data(DBI::dbReadTable(main_con, "ISRCTN"))
+ eu_data(DBI::dbReadTable(main_con, "EU"))
+ nihr_data(DBI::dbReadTable(main_con, "NIHR"))
+}
+
+
+output$live_trial_table_nct <- DT::renderDT({
+
+  # Ensure the database connection and trial ID list are available
+  req(main_con, trial_id_df)
+
+  # NCT data
+  nct_data <- DBI::dbReadTable(main_con, "NCT")
+  
+  # Create 'Date Added' summary
+  NCT_dates <- nct_data |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = NCTId)
+
+  # Filter and join
+  nct_data |>
+    dplyr::filter(NCTId %in% trial_id_df$NCT_Ids) |>
+    dplyr::left_join(NCT_dates, by = "NCTId") |>
+    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
+    dplyr::select(-Query_Date, -SeeAlsoLinkURL) |>
+    dplyr::select(Program, Guideline.number, `Date Added`, everything()) |>
+    dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
+    dplyr::mutate(across(
+      c(PrimaryCompletionDate:LastUpdatePostDate),
+      \(x) lubridate::as_date(lubridate::parse_date_time(x, c("ymd", "bdy"), truncated = 1L))
+    )) |>
+    dplyr::rename(
+      Guideline = Guideline.number,
+      `NCT ID` = NCTId,
+      `Org Study ID` = OrgStudyId,
+      Title = BriefTitle,
+      Status = OverallStatus,
+      `Primary Completion Date` = PrimaryCompletionDate,
+      `Completion Date` = CompletionDate,
+      `Results Submit Date` = ResultsFirstSubmitDate,
+      `Results Post Date` = ResultsFirstPostDate,
+      `Last Update` = LastUpdatePostDate
+    ) |>
+    dplyr::arrange(desc(`Date Added`), Program, Guideline, `NCT ID`) |>
+    dplyr::distinct() |>
+    DT::datatable(
+      options = list(bPaginate = FALSE, scrollY = "70vh"),
+      filter = "top"
+    )
+})
+output$live_trial_table_isrctn <- DT::renderDT({
+  
+  #Set requirements for function
+  req(main_con, trial_id_df)
+
+  # Create 'Date Added' summary
+  ISRCTN_dates <- DBI::dbReadTable(main_con, "ISRCTN") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = ISRCTN_No)
+
+  # Filter, join, and process
+  DBI::dbReadTable(main_con, "ISRCTN") |>
+    dplyr::filter(ISRCTN_No %in% trial_id_df$ISRCTN_Ids) |>
+    dplyr::left_join(ISRCTN_dates, by = "ISRCTN_No") |>
+    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
+    dplyr::select(-Query_Date) |>
+    dplyr::select(Program, Guideline.number, `Date Added`, everything()) |>
+    dplyr::mutate(
+      across(.cols = everything(), .fns = clean_UTF),
+      `Results completed date` = lubridate::dmy(Results_date_completed),
+      `Results posted date` = lubridate::dmy(Results_date_posted),
+      `Results published date` = lubridate::dmy(Results_date_first_publication)
+    ) |>
+    dplyr::distinct() |>
+    dplyr::rename(
+      Guideline = Guideline.number,
+      `ISRCTN ID` = ISRCTN_No,
+      Title = Public_Title,
+      `Scientific Title` = Scientific_Title,
+      `Recruitment Status` = Recruitment_Status,
+      `Results URL` = Results_url_link,
+      `Results summary` = Results_summary
+    ) |>
+    dplyr::select(
+      Program, Guideline, `Date Added`, URL, `ISRCTN ID`, Title, Acronym,
+      `Scientific Title`, `Recruitment Status`, `Results URL`, `Results summary`,
+      `Results completed date`, `Results posted date`, `Results published date`, Comments
+    ) |>
+    dplyr::arrange(desc(`Date Added`), Program, Guideline, `ISRCTN ID`) |>
+    DT::datatable(
+      options = list(bPaginate = FALSE, scrollY = TRUE),
+      filter = "top"
+    )
+})
+output$live_trial_table_nihr <- DT::renderDT({
+  
+  #Requirements
+  req(main_con, trial_id_df)
+
+  # Create 'Date Added' summary
+  NIHR_dates <- DBI::dbReadTable(main_con, "NIHR") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = project_id)
+
+  # Filter, join, and process
+  DBI::dbReadTable(main_con, "NIHR") |>
+    dplyr::mutate(project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
+    dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
+    dplyr::select(-project_id_filter) |>
+    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
+    dplyr::select(-Query_Date) |>
+    dplyr::left_join(NIHR_dates, by = "project_id") |>
+    dplyr::select(Program, Guideline.number, `Date Added`, everything()) |>
+    dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
+    dplyr::rename(
+      Guideline = Guideline.number,
+      `NIHR ID` = project_id,
+      `Project Title` = project_title,
+      Status = project_status,
+      `End Date` = end_date
+    ) |>
+    dplyr::arrange(desc(`Date Added`), Program, Guideline, `NIHR ID`) |>
+    dplyr::distinct() |>
+    DT::datatable(
+      options = list(bPaginate = FALSE, scrollY = TRUE),
+      filter = "top"
+    )
+})
+output$live_trial_table_eu <- DT::renderDT({
+  
+  #Requirements
+  req(main_con, trial_id_df)
+
+  # Create 'Date Added' summary
+  EU_dates <- DBI::dbReadTable(main_con, "EU") |>
+    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = EU_Ids)
+
+  # Filter, join, and process
+  DBI::dbReadTable(main_con, "EU") |>
+    dplyr::mutate(short_id = stringr::str_sub(`X_id`, 1L, 14L)) |>
+    dplyr::filter(short_id %in% trial_id_df$EU_Ids) |>
+    dplyr::left_join(EU_dates, by = "EU_Ids") |>
+    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
+    dplyr::select(
+      -Query_Date,
+      -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language,
+      -EU_Ids,
+      -short_id
+    ) |>
+    dplyr::select(Program, Guideline.number, `Date Added`, everything()) |>
+    dplyr::mutate(across(.cols = everything(), .fns = clean_UTF)) |>
+    dplyr::rename(
+      Guideline = Guideline.number,
+      `Clinicaltrials.eu ID` = `X_id`,
+      `End of Trial Status` = p_end_of_trial_status,
+      Title = a3_full_title_of_the_trial,
+      `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
+      `Sponsor ID` = a41_sponsors_protocol_code_number
+    ) |>
+    dplyr::arrange(desc(`Date Added`), Program, Guideline, `Clinicaltrials.eu ID`) |>
+    dplyr::distinct() |>
+    DT::datatable(
+      options = list(bPaginate = FALSE, scrollY = TRUE),
+      filter = "top"
+    )
+})
 
 ```
