@@ -5,6 +5,7 @@ format:
     includes:
       in-header: Secrets/GA_Script.html
     css: styles.css
+    output-file: "index.html"
 server: shiny
 brand: _brand.yml
 ---
@@ -15,7 +16,7 @@ brand: _brand.yml
   
 #library(shiny)
 
-main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_Data", "TrialTracker-db.sqlite"))
+main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite"))
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
 
 clean_UTF <- function(x) {
@@ -31,7 +32,7 @@ NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-
 
 # Live Trial Info
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
+**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -173,7 +174,8 @@ DBI::dbReadTable(main_con, "EU") |>
 
 # Recent Status Changes
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**\
+**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**\
+
 **Changes are from 31 days ago**
 
 <div style="height: 80vh;">
@@ -384,7 +386,7 @@ compareDF::compare_df(
 
 # No Changes in Last 6m
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
+**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -519,7 +521,7 @@ dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], ke
 
 # Pubmed Publications
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_Data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
+**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}

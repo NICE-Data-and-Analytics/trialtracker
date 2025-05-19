@@ -485,17 +485,17 @@ update_db_for_NIHR_changes <- function(main_con, trial_id_df) {
     NIHR_json <- jsonlite::fromJSON(url(NIHR_URL_API2))
 
     # Process trial IDs
-    NIHR_Trial_IDs <- trial_id_df %>%
-      dplyr::select(Program, Guideline.number, URL, NIHR_Ids) %>%
-      tidyr::drop_na(NIHR_Ids) %>%
+    NIHR_Trial_IDs <- trial_id_df |>
+      dplyr::select(Program, Guideline.number, URL, NIHR_Ids) |>
+      tidyr::drop_na(NIHR_Ids) |>
       dplyr::mutate("projectjoin" = stringr::str_replace_all(NIHR_Ids, "[^\\d]", ""))
 
     # Process NIHR data and join with trial IDs
-    NIHR_DF <- NIHR_json %>%
-      dplyr::mutate("projectjoin" = stringr::str_replace_all(project_id, "[^\\d]", "")) %>%
-      dplyr::right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") %>%
-      tidyr::drop_na(projectjoin) %>%
-      dplyr::mutate(Query_Date = Sys.Date()) %>%
+    NIHR_DF <- NIHR_json |>
+      dplyr::mutate("projectjoin" = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
+      dplyr::right_join(NIHR_Trial_IDs, by = c("projectjoin"), multiple = "all") |>
+      tidyr::drop_na(projectjoin) |>
+      dplyr::mutate(Query_Date = Sys.Date())  |>
       dplyr::select(Query_Date,
                     Program,
                     Guideline.number,
@@ -504,7 +504,7 @@ update_db_for_NIHR_changes <- function(main_con, trial_id_df) {
                     project_title,
                     project_status,
                     project_id,
-                    end_date) %>%
+                    end_date) |>
       dplyr::distinct()
 
     # Update the database
