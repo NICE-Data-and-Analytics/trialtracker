@@ -22,13 +22,55 @@ NCT_pattern <- "NCT[0-9]{8}"
 EU_pattern <- "[0-9]{4}-[0-9]{6}-[0-9]{2}"
 ISRCTN_pattern <- "ISRCTN[0-9]{8}"
 NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})"
+
+# Helper functions (non-reactive and used for rendering UI)
+
+# Clean UTF function
+clean_utf8 <- function(x){
+  iconv(x, "UTF-8", "UTF-8", sub = "")
+}
+
+# Render pubmed
+render_pubmed_table <- function(table_name) {
+  if (!table_name %in% DBI::dbListTables(main_con)) return(NULL)
+
+  DBI::dbReadTable(main_con, table_name) |>
+    dplyr::mutate(across(everything(), .fns = clean_utf8)) |>
+    dplyr::mutate(
+      Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
+      abstract = stringr::str_trunc(abstract, 200L)
+    ) |>
+    dplyr::rename(
+      `Query Date` = Query_Date,
+      `Trial ID` = ID,
+      `Publication DOI` = doi,
+      Title = title,
+      Abstract = abstract,
+      Journal = jabbrv,
+      Condition = `Short..working.title.`,
+      Guideline = Guideline.number
+    ) |>
+    dplyr::select(
+      Program, Guideline, `Query Date`, `Trial ID`, pmid,
+      `Publication DOI`, Title, Abstract, Journal, Condition
+    ) |>
+    dplyr::distinct() |>
+    dplyr::arrange(dplyr::desc(`Query Date`)) |>
+    DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+}
+
+
 ```
 
 # Live Trial Info
 
+::: {.value-box}
+**Last Updated:** 
 ```{r}
-shiny::tags$strong("Last Updated: "), shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text")
 ```
+:::
+
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -63,7 +105,7 @@ DT::dataTableOutput("live_trial_table_eu")
 # Recent Status Changes
 
 ```{r}
-shiny::tags$strong("Last Updated: "), shiny::textOutput("timestamp_text")
+shiny::tagList(shiny::tags$strong("Last Updated: "), shiny::textOutput("timestamp_text"))
 ```
 
 **Changes are from 31 days ago**
@@ -100,7 +142,9 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 
 # No Changes in Last 6m
 
-**Last Updated:** `r textOutput("timestamp_text")`
+```{r}
+shiny::tagList(shiny::tags$strong("Last Updated: "), shiny::textOutput("timestamp_text"))
+```
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -463,10 +507,7 @@ refresh_all_data <- function() {
   last_refreshed(Sys.time())
 }
 
-# Clean UTF function
-clean_utf8 <- function(x){
-  iconv(x, "UTF-8", "UTF-8", sub = "")
-}
+
 
 ```
 
@@ -750,15 +791,12 @@ output$clinicaltrialseu_monthly_change <- DT::renderDT({
 
 ```{r ServerNoChangesInLast6M, context = "server"}
 
-# Initialise variable for how long to look back
-look_back_time <- months(6L)
-
 # Shared helper for no-change tables
 generate_nochange_table <- function(data, id_col, rename_list, drop_cols = NULL, reorder_cols = NULL, date_cols = NULL, extra_mutate = NULL) {
   req(data)
 
   max_date <- max(data$Query_Date, na.rm = TRUE)
-  old_date <- max_date - look_back_time
+  old_date <- max_date - months(6L)
 
   current <- dplyr::filter(data, Query_Date == max_date)
   old <- dplyr::filter(data, Query_Date == old_date)
@@ -874,38 +912,6 @@ output$no_change_cteu <- DT::renderDT({
                      "Abbreviated Title", "End of Trial Status", "Sponsor ID")
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-
-```
-
-```{r ServerPubmedHelper, context = "server"}
-
-render_pubmed_table <- function(table_name) {
-  if (!table_name %in% DBI::dbListTables(main_con)) return(NULL)
-
-  DBI::dbReadTable(main_con, table_name) |>
-    dplyr::mutate(across(everything(), .fns = clean_utf8)) |>
-    dplyr::mutate(
-      Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
-      abstract = stringr::str_trunc(abstract, 200L)
-    ) |>
-    dplyr::rename(
-      `Query Date` = Query_Date,
-      `Trial ID` = ID,
-      `Publication DOI` = doi,
-      Title = title,
-      Abstract = abstract,
-      Journal = jabbrv,
-      Condition = `Short..working.title.`,
-      Guideline = Guideline.number
-    ) |>
-    dplyr::select(
-      Program, Guideline, `Query Date`, `Trial ID`, PMID,
-      `Publication DOI`, Title, Abstract, Journal, Condition
-    ) |>
-    dplyr::distinct() |>
-    dplyr::arrange(dplyr::desc(`Query Date`)) |>
-    DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-}
 
 ```
 
