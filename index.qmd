@@ -485,7 +485,7 @@ refresh_all_data <- function() {
 }
 
 # Clean UTF function
-clean_UTF <- function(x){
+clean_utf88 <- function(x){
   iconv(x, "UTF-8", "UTF-8", sub = "")
 }
 
@@ -505,7 +505,7 @@ render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols
     dplyr::left_join(date_added_df, by = rlang::as_string(rlang::ensym(id_col))) |>
     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
     dplyr::select(-Query_Date) |>
-    dplyr::mutate(across(.cols = everything(), .fns = clean_UTF))
+    dplyr::mutate(across(.cols = everything(), .fns = clean_utf88))
 
   if (is.function(extra_mutate)) processed <- extra_mutate(processed)
 
@@ -662,7 +662,7 @@ output$nct_monthly_change <- DT::renderDT({
       Title = stringr::str_trunc(BriefTitle, 80L),
       Condition = stringr::str_trunc(Condition, 30L)
     ) |>
-    dplyr::mutate(across(everything(), .fns = clean_UTF)) |>
+    dplyr::mutate(across(everything(), .fns = clean_utf8)) |>
     dplyr::mutate(across(c(CompletionDate:LastUpdatePostDate),
                          ~ lubridate::as_date(lubridate::parse_date_time(.x, c("ymd", "bdy"), truncated = 1L)))) |>
     dplyr::select(Change = chng_type, Program, Guideline = Guideline.number, URL = URL2, Acronym, Title, Condition,
@@ -687,7 +687,7 @@ output$isrctn_monthly_change <- DT::renderDT({
     dplyr::left_join(dfs$new) |>
     dplyr::mutate(
       Title = stringr::str_trunc(Scientific_Title, 75L),
-      across(everything(), .fns = clean_UTF),
+      across(everything(), .fns = clean_utf8),
       Results_date_completed = lubridate::dmy(Results_date_completed),
       Results_date_posted = lubridate::dmy(Results_date_posted),
       Results_date_first_publication = lubridate::dmy(Results_date_first_publication)
@@ -722,7 +722,7 @@ output$nihr_monthly_change <- DT::renderDT({
     dplyr::left_join(dfs$new) |>
     dplyr::mutate(
       Title = stringr::str_trunc(project_title, 90L),
-      across(everything(), .fns = clean_UTF)
+      across(everything(), .fns = clean_utf8)
     ) |>
     dplyr::select(
       Change = chng_type,
@@ -752,7 +752,7 @@ output$clinicaltrialseu_monthly_change <- DT::renderDT({
     dplyr::left_join(dfs$new) |>
     dplyr::mutate(
       Title = stringr::str_trunc(a3_full_title_of_the_trial, 90L),
-      across(everything(), .fns = clean_UTF)
+      across(everything(), .fns = clean_utf8)
     ) |>
     dplyr::select(
       Change = chng_type,
@@ -790,7 +790,7 @@ generate_nochange_table <- function(data, id_col, rename_list, drop_cols = NULL,
   joined <- dplyr::inner_join(current, old, by = names(current)[2:(ncol(current) - 1)], keep = FALSE) |>
     dplyr::select(-contains(".x"), -contains(".y")) |>
     dplyr::left_join(date_added, by = rlang::as_string(rlang::ensym(id_col))) |>
-    dplyr::mutate(across(.cols = everything(), .fns = clean_UTF))
+    dplyr::mutate(across(.cols = everything(), .fns = clean_utf88))
 
   if (!is.null(date_cols)) {
     joined <- joined |>
@@ -904,7 +904,7 @@ render_pubmed_table <- function(table_name) {
   if (!table_name %in% DBI::dbListTables(main_con)) return(NULL)
 
   DBI::dbReadTable(main_con, table_name) |>
-    dplyr::mutate(across(everything(), .fns = clean_UTF)) |>
+    dplyr::mutate(across(everything(), .fns = clean_utf888)) |>
     dplyr::mutate(
       Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
       abstract = stringr::str_trunc(abstract, 200L)
@@ -1285,6 +1285,4 @@ output$button_download_dbs <- shiny::downloadHandler(
   }
 )
 
-
 ```
-
