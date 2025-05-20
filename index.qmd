@@ -64,7 +64,11 @@ DT::dataTableOutput("live_trial_table_eu")
 
 # Recent Status Changes
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**\
+<div style="font-style: bold;">
+```{r}
+  shiny::textOutput("timestamp_text")
+```
+</div>
 
 **Changes are from 31 days ago**
 
@@ -280,7 +284,11 @@ compareDF::compare_df(
 
 # No Changes in Last 6m
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
+<div style="font-style: bold;">
+```{r}
+  shiny::textOutput("timestamp_text")
+```
+</div>
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -431,7 +439,11 @@ dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], ke
 
 # Pubmed Publications
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
+<div style="font-style: bold;">
+```{r}
+  shiny::textOutput("timestamp_text")
+```
+</div>
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -809,15 +821,15 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 
 ```{r ServerCodeUpdates, context = "server"}
 
+# Inititalise reactive vals for live trial info tables
+nct_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NCT"))
+isrctn_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "ISRCTN"))
+eu_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "EU"))
+nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
+
 # Initialise timestamp and trigger
 last_refreshed <- shiny::reactiveVal(Sys.time())
 refresh_trigger <- shiny::reactiveVal(0)
-
-# Inititalise reactive vals for live trial info tables
-nct_data <- shiny::reactiveVal()
-isrctn_data <- shiny::reactiveVal()
-eu_data <- shiny::reactiveVal()
-nihr_data <- shiny::reactiveVal()
 
 # Create output for 'last_updated' timestamp
 output$timestamp_text <- renderText({
