@@ -484,12 +484,18 @@ nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
 last_refreshed <- shiny::reactiveVal(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
 
 # Create output for 'last_updated' timestamp
+# output$timestamp_text <- shiny::renderText({
+#   paste(
+#     "🔄 Last refreshed at:",
+#     format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
+#   )
+# })
+
+# Debug version
 output$timestamp_text <- shiny::renderText({
-  paste(
-    "🔄 Last refreshed at:",
-    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
-  )
+  "Test timestamp output rendering"
 })
+
 
 # Central refresh function
 refresh_all_data <- function() {
