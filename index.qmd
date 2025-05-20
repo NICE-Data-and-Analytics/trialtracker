@@ -690,7 +690,7 @@ refresh_all_data <- function() {
 
 # Shared helper for rendering livetrialinfos
 render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols = NULL, extra_mutate = NULL, extra_filter = NULL) {
-  data_filtered <- if (!is.null(extra_filter)) extra_filter(data) else data
+  data_filtered <- if (is.function(extra_filter)) extra_filter(data) else data
 
   date_added_df <- data_filtered |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = {{ id_col }})
@@ -702,7 +702,7 @@ render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols
     dplyr::select(-Query_Date) |>
     dplyr::mutate(across(.cols = everything(), ~ iconv(.x, "UTF-8", "UTF-8", sub = "")))
 
-  if (!is.null(extra_mutate)) processed <- extra_mutate(processed)
+  if (is.function(extra_mutate)) processed <- extra_mutate(processed)
 
   processed <- processed |>
     dplyr::rename(!!!rename_list)
