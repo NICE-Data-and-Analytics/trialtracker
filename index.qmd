@@ -67,13 +67,11 @@ render_pubmed_table <- function(table_name) {
 <div style="height: 80vh;">
 ::: {.panel-tabset}
 
-::: {.value-box}
+## ClinicalTrials.gov
+
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
-:::
-
-## ClinicalTrials.gov
 
 ```{r CTGlive}
 DT::dataTableOutput("live_trial_table_nct")
@@ -81,17 +79,29 @@ DT::dataTableOutput("live_trial_table_nct")
 
 ## ISRCTN
 
+```{r}
+shiny::textOutput("timestamp_text")
+```
+
 ```{r ISCTNlive}
 DT::dataTableOutput("live_trial_table_isrctn")
 ```
 
 ## NIHR
 
+```{r}
+shiny::textOutput("timestamp_text")
+```
+
 ```{r NIHRlive}
 DT::dataTableOutput("live_trial_table_nihr")
 ```
 
 ## Clinicaltrials.eu
+
+```{r}
+shiny::textOutput("timestamp_text")
+```
 
 ```{r EUlive}
 DT::dataTableOutput("live_trial_table_eu")
@@ -104,14 +114,16 @@ DT::dataTableOutput("live_trial_table_eu")
 
 **Changes are from 31 days ago**
 
-<div style="height: 80vh;">
-::: {.panel-tabset}
+::: {.card}
 
-::: {.value-box}
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
+
 :::
+
+<div style="height: 80vh;">
+::: {.panel-tabset}
 
 ### ClinicalTrials.gov
 
@@ -484,18 +496,12 @@ nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
 last_refreshed <- shiny::reactiveVal(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
 
 # Create output for 'last_updated' timestamp
-# output$timestamp_text <- shiny::renderText({
-#   paste(
-#     "🔄 Last refreshed at:",
-#     format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
-#   )
-# })
-
-# Debug version    
 output$timestamp_text <- shiny::renderText({
-  "Test timestamp output rendering"
+  paste(
+    "🔄 Last refreshed at:",
+    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
+  )
 })
-
 
 # Central refresh function
 refresh_all_data <- function() {
