@@ -26,7 +26,11 @@ NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-
 
 # Live Trial Info
 
-**Last refreshed: `r file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime |> format.POSIXct(digits = 0)`**
+<div style="font-style: bold;">
+```{r}
+  shiny::textOutput("timestamp_text")
+```
+</div>
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -805,6 +809,44 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 
 ```{r ServerCodeUpdates, context = "server"}
 
+# Initialise timestamp and trigger
+last_refreshed <- shiny::reactiveVal(Sys.time())
+refresh_trigger <- shiny::reactiveVal(0)
+
+# Inititalise reactive vals for live trial info tables
+nct_data <- shiny::reactiveVal()
+isrctn_data <- shiny::reactiveVal()
+eu_data <- shiny::reactiveVal()
+nihr_data <- shiny::reactiveVal()
+
+# Create output for 'last_updated' timestamp
+output$timestamp_text <- renderText({
+  paste(
+    "🔄 Last refreshed at:",
+    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
+  )
+})
+
+
+# Debounced reactive trigger
+debounced_refresh <- shiny::debounce(refresh_trigger, millis = 1000)
+
+# Central refresh function
+refresh_all_data <- function() {
+  trialtracker::download_trial_info_wrapper_no_pm_or_email()
+
+  nct_data(DBI::dbReadTable(main_con, "NCT"))
+  isrctn_data(DBI::dbReadTable(main_con, "ISRCTN"))
+  eu_data(DBI::dbReadTable(main_con, "EU"))
+  nihr_data(DBI::dbReadTable(main_con, "NIHR"))
+
+  last_refreshed(Sys.time())
+  refresh_trigger(isolate(refresh_trigger()) + 1L)
+}
+
+
+#### Functionality to add / remove / archive /comment
+
 ### ADD SINGLE TRIAL
   
 # SQL template for adding single trial
@@ -833,7 +875,7 @@ shiny::observeEvent(input$button_add, {
 
     DBI::dbExecute(main_con, exp_add())
 
-    trialtracker::download_trial_info_wrapper_no_pm_or_email()
+    refresh_all_data()
 
     shinybusy::remove_modal_spinner()
 
@@ -936,7 +978,7 @@ shiny::observeEvent(input$button_add_multi, {
 
     DBI::dbAppendTable(main_con, "Trial_Ids", to_add())
 
-    trialtracker::download_trial_info_wrapper_no_pm_or_email()
+    refresh_all_data()
 
     shinybusy::remove_modal_spinner()
 
@@ -987,7 +1029,7 @@ shiny::observeEvent(input$button_delete, {
 
   DBI::dbExecute(main_con, exp_delete())
 
-  trialtracker::download_trial_info_wrapper_no_pm_or_email()
+  refresh_all_data()
 
   shinybusy::remove_modal_spinner()
 
@@ -1047,7 +1089,7 @@ shiny::observeEvent(input$button_archive, {
 
   DBI::dbExecute(main_con, exp_delete())
 
-  trialtracker::download_trial_info_wrapper_no_pm_or_email()
+  refresh_all_data()
 
   shinybusy::remove_modal_spinner()
 
@@ -1158,34 +1200,20 @@ output$button_download_dbs <- shiny::downloadHandler(
 
 ```{r ServerLiveTrialInfo, context = "server"}
 
-nct_data <- shiny::reactiveVal()
-isrctn_data <- shiny::reactiveVal()
-eu_data <- shiny::reactiveVal()
-nihr_data <- shiny::reactiveVal()
-
-
-load_all_trial_data <- function() {
- nct_data(DBI::dbReadTable(main_con, "NCT"))
- isrctn_data(DBI::dbReadTable(main_con, "ISRCTN"))
- eu_data(DBI::dbReadTable(main_con, "EU"))
- nihr_data(DBI::dbReadTable(main_con, "NIHR"))
-}
-
-
 output$live_trial_table_nct <- DT::renderDT({
 
-  # Ensure the database connection and trial ID list are available
-  req(main_con, trial_id_df)
+  # Debounced refresh - trigger re-evaluation when refresh finishes 
+  debounced_refresh()  
 
-  # NCT data
-  nct_data <- DBI::dbReadTable(main_con, "NCT")
-  
+  # Ensure the database connection and trial ID list are available
+  req(main_con, trial_id_df, nct_data())
+
   # Create 'Date Added' summary
-  NCT_dates <- nct_data |>
+  NCT_dates <- nct_data() |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = NCTId)
 
   # Filter and join
-  nct_data |>
+  nct_data() |>
     dplyr::filter(NCTId %in% trial_id_df$NCT_Ids) |>
     dplyr::left_join(NCT_dates, by = "NCTId") |>
     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
@@ -1217,15 +1245,18 @@ output$live_trial_table_nct <- DT::renderDT({
 })
 output$live_trial_table_isrctn <- DT::renderDT({
   
+  # Debounced refresh - trigger re-evaluation when refresh finishes 
+  debounced_refresh()  
+  
   #Set requirements for function
-  req(main_con, trial_id_df)
+  req(main_con, trial_id_df, isrctn_data())
 
   # Create 'Date Added' summary
-  ISRCTN_dates <- DBI::dbReadTable(main_con, "ISRCTN") |>
+  ISRCTN_dates <- isrctn_data() |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = ISRCTN_No)
 
   # Filter, join, and process
-  DBI::dbReadTable(main_con, "ISRCTN") |>
+  isrctn_data() |>
     dplyr::filter(ISRCTN_No %in% trial_id_df$ISRCTN_Ids) |>
     dplyr::left_join(ISRCTN_dates, by = "ISRCTN_No") |>
     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
@@ -1260,15 +1291,18 @@ output$live_trial_table_isrctn <- DT::renderDT({
 })
 output$live_trial_table_nihr <- DT::renderDT({
   
+  # Debounced refresh - trigger re-evaluation when refresh finishes 
+  debounced_refresh()  
+
   #Requirements
-  req(main_con, trial_id_df)
+  req(main_con, trial_id_df, nihr_data())
 
   # Create 'Date Added' summary
-  NIHR_dates <- DBI::dbReadTable(main_con, "NIHR") |>
+  NIHR_dates <- nihr_data() |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = project_id)
 
   # Filter, join, and process
-  DBI::dbReadTable(main_con, "NIHR") |>
+  nihr_data() |>
     dplyr::mutate(project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
     dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
     dplyr::select(-project_id_filter) |>
@@ -1293,15 +1327,18 @@ output$live_trial_table_nihr <- DT::renderDT({
 })
 output$live_trial_table_eu <- DT::renderDT({
   
+  # Debounced refresh - trigger re-evaluation when refresh finishes 
+  debounced_refresh()  
+
   #Requirements
-  req(main_con, trial_id_df)
+  req(main_con, trial_id_df, eu_data())
 
   # Create 'Date Added' summary
-  EU_dates <- DBI::dbReadTable(main_con, "EU") |>
+  EU_dates <- eu_data() |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = EU_Ids)
 
   # Filter, join, and process
-  DBI::dbReadTable(main_con, "EU") |>
+  eu_data() |>
     dplyr::mutate(short_id = stringr::str_sub(`X_id`, 1L, 14L)) |>
     dplyr::filter(short_id %in% trial_id_df$EU_Ids) |>
     dplyr::left_join(EU_dates, by = "EU_Ids") |>
