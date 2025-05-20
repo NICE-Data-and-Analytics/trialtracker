@@ -28,7 +28,7 @@ NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-
 
 <div style="font-style: bold;">
 ```{r}
-  shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text")
 ```
 </div>
 
@@ -66,7 +66,7 @@ DT::dataTableOutput("live_trial_table_eu")
 
 <div style="font-style: bold;">
 ```{r}
-  shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text")
 ```
 </div>
 
@@ -115,7 +115,7 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 
 <div style="font-style: bold;">
 ```{r}
-  shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text")
 ```
 </div>
 
@@ -270,7 +270,7 @@ dplyr::inner_join(current, old, by = names(current)[2L:(ncol(current) - 1L)], ke
 
 <div style="font-style: bold;">
 ```{r}
-  shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text")
 ```
 </div>
 
@@ -661,7 +661,7 @@ last_refreshed <- shiny::reactiveVal(Sys.time())
 refresh_trigger <- shiny::reactiveVal(0)
 
 # Create output for 'last_updated' timestamp
-output$timestamp_text <- renderText({
+output$timestamp_text <- shiny::renderText({
   paste(
     "🔄 Last refreshed at:",
     format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
@@ -717,6 +717,7 @@ render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols
     dplyr::distinct()
 }
 
+# Live trial status tables
 output$live_trial_table_nct <- DT::renderDT({
   debounced_refresh()
   req(main_con, trial_id_df, nct_data())
@@ -815,7 +816,6 @@ output$live_trial_table_eu <- DT::renderDT({
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
-
 ```
 
 ```{r ServerRecentStatusChanges, context = "server"}
@@ -835,6 +835,8 @@ get_new_old_df <- function(data, id_col, ids) {
 
   list(new = new_df, old = old_df)
 }
+
+# Recent Status Changes Tables
 output$nct_monthly_change <- DT::renderDT({
   debounced_refresh()
   req(main_con, trial_id_df, nct_data())
@@ -864,7 +866,7 @@ output$nct_monthly_change <- DT::renderDT({
                   `Last Update Date` = LastUpdatePostDate, Comments) |>
     dplyr::distinct()
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-output$ISRCTN_monthly_change <- DT::renderDT({
+output$isrctn_monthly_change <- DT::renderDT({
   debounced_refresh()
   req(main_con, trial_id_df, isrctn_data())
 
@@ -961,199 +963,6 @@ output$clinicaltrialseu_monthly_change <- DT::renderDT({
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 
 ```
-
-```{r ServerRecentStatusChangesOLD, context = "server"}
-
-# output$nctmonthlychange <- DT::renderDT({
-#   debounced_refresh()
-#   req(main_con, trial_id_df, nct_data())
-# 
-#   new_df <- nct_data() |>
-#     dplyr::filter(NCTId %in% trial_id_df$NCT_Ids) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   old_df <- DBI::dbReadTable(main_con, "NCT") |>
-#     dplyr::filter(
-#       Query_Date <= Sys.Date() - 31L,
-#       NCTId %in% trial_id_df$NCT_Ids
-#     ) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   compareDF::compare_df(
-#     new_df,
-#     old_df,
-#     group_col = c("Guideline.number", "NCTId"),
-#     exclude = c(
-#       "Query_Date", "Comments", "Condition", "BriefTitle", "Acronym",
-#       "PrimaryCompletionDate", "ResultsFirstSubmitDate", "SeeAlsoLinkURL"
-#     ),
-#     stop_on_error = FALSE
-#   )$comparison_df |>
-#     dplyr::left_join(
-#       new_df |>
-#         dplyr::select(
-#           BriefTitle, Program, Guideline.number, URL, NCTId, Condition,
-#           ResultsFirstSubmitDate, Acronym, Comments
-#         ),
-#       by = c("Program", "Guideline.number", "URL", "NCTId")
-#     ) |>
-#     dplyr::mutate(
-#       URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
-#       Title = stringr::str_trunc(BriefTitle, 80L),
-#       Condition = stringr::str_trunc(Condition, 30L)
-#     ) |>
-#     dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = ""))) |>
-#     dplyr::mutate(across(
-#       c(CompletionDate:LastUpdatePostDate),
-#       \(x) lubridate::as_date(lubridate::parse_date_time(x, c("ymd", "bdy"), truncated = 1L))
-#     )) |>
-#     dplyr::select(
-#       Change = chng_type,
-#       Program,
-#       Guideline = Guideline.number,
-#       URL = URL2,
-#       Acronym,
-#       Title,
-#       Condition,
-#       Status = OverallStatus,
-#       `Completion Date` = CompletionDate,
-#       `Results Submit Date` = ResultsFirstSubmitDate,
-#       `Last Update Date` = LastUpdatePostDate,
-#       Comments
-#     ) |>
-#     dplyr::distinct() |>
-#     DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-# })
-# output$ISRCTNmonthlychange <- DT::renderDT({
-#   debounced_refresh()
-#   req(main_con, trial_id_df, isrctn_data())
-# 
-#   new_df <- isrctn_data() |>
-#     dplyr::filter(ISRCTN_No %in% trial_id_df$ISRCTN_Ids) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   old_df <- DBI::dbReadTable(main_con, "ISRCTN") |>
-#     dplyr::filter(
-#       Query_Date <= Sys.Date() - 31L,
-#       ISRCTN_No %in% trial_id_df$ISRCTN_Ids
-#     ) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   compareDF::compare_df(
-#     new_df,
-#     old_df,
-#     group_col = c("Guideline.number", "ISRCTN_No"),
-#     exclude = c("Query_Date", "Comments"),
-#     stop_on_error = FALSE
-#   )$comparison_df |>
-#     dplyr::left_join(new_df) |>
-#     dplyr::mutate(
-#       Title = stringr::str_trunc(Scientific_Title, 75L),
-#       across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = "")),
-#       Results_date_completed = lubridate::dmy(Results_date_completed),
-#       Results_date_posted = lubridate::dmy(Results_date_posted),
-#       Results_date_first_publication = lubridate::dmy(Results_date_first_publication)
-#     ) |>
-#     dplyr::select(
-#       Change = chng_type,
-#       Program,
-#       Guideline = Guideline.number,
-#       URL,
-#       Acronym,
-#       Title,
-#       Status = Recruitment_Status,
-#       `Results URL` = Results_url_link,
-#       `Results Summary` = Results_summary,
-#       `Results Completed` = Results_date_completed,
-#       `Results Posted` = Results_date_posted,
-#       `Results Published` = Results_date_first_publication
-#     ) |>
-#     dplyr::distinct() |>
-#     DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-# })
-# output$nihrmonthlychange <- DT::renderDT({
-# 
-#   debounced_refresh()
-#   req(main_con, trial_id_df, nihr_data())
-# 
-#   new_df <- nihr_data() |>
-#     dplyr::mutate("project_id_filter" = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
-#     dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
-#     dplyr::select(-project_id_filter) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   old_df <- nihr_data() |>
-#     dplyr::mutate("project_id_filter" = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
-#     dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
-#     dplyr::select(-project_id_filter) |>
-#     dplyr::filter(Query_Date <= Sys.Date() - 31L) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   compareDF::compare_df(
-#     new_df,
-#     old_df,
-#     group_col = c("Guideline.number", "project_id"),
-#     exclude = c("Query_Date", "Comments"),
-#     stop_on_error = FALSE
-#   )$comparison_df |>
-#     dplyr::left_join(new_df) |>
-#     dplyr::mutate(Title = stringr::str_trunc(project_title, 90L)) |>
-#     dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = ""))) |>
-#     dplyr::select(
-#       Change = chng_type,
-#       Program,
-#       Guideline = Guideline.number,
-#       URL,
-#       `NIHR ID` = project_id,
-#       Title,
-#       Status = project_status,
-#       `End Date` = end_date
-#     ) |>
-#     dplyr::distinct()
-# 
-# }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-# output$clinicaltrialseumonthlychange <- DT::renderDT({
-# 
-#   debounced_refresh()
-#   req(main_con, trial_id_df, eu_data())
-# 
-#   new_df <- eu_data() |>
-#     dplyr::filter(EU_Ids %in% trial_id_df$EU_Ids) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   old_df <- eu_data() |>
-#     dplyr::filter(
-#       Query_Date <= Sys.Date() - 30L,
-#       EU_Ids %in% trial_id_df$EU_Ids
-#     ) |>
-#     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
-# 
-#   compareDF::compare_df(
-#     new_df,
-#     old_df,
-#     group_col = c("Guideline.number", "EU_Ids"),
-#     exclude = c("Query_Date", "Comments"),
-#     stop_on_error = FALSE
-#   )$comparison_df |>
-#     dplyr::left_join(new_df) |>
-#     dplyr::mutate(Title = stringr::str_trunc(a3_full_title_of_the_trial, 90L)) |>
-#     dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = ""))) |>
-#     dplyr::select(
-#       Change = chng_type,
-#       Program,
-#       Guideline = Guideline.number,
-#       URL,
-#       `EU ID` = EU_Ids,
-#       Status = p_end_of_trial_status,
-#       Acronym = a32_name_or_abbreviated_title_of_the_trial_where_available,
-#       Title
-#     ) |>
-#     dplyr::distinct()
-# 
-# }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-
-```
-
 
 ```{r ServerUserInteractions, context = "server"}
 
