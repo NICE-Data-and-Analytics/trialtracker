@@ -70,34 +70,25 @@ DT::dataTableOutput("live_trial_table_eu")
 ### ClinicalTrials.gov
 
 ```{r NCTmonthlychange}
-
 DT::dataTableOutput("nct_monthly_change")
-
 ```
 
 ### ISRCTN
 
 ```{r ISRCTNmonthlychange}
-
 DT::dataTableOutput("isrctn_monthly_change")
-
-
 ```
 
 ### NIHR
 
 ```{r NIHRmonthlychange}
-
 DT::dataTableOutput("nihr_monthly_change")
-
 ```
 
 ### Clinicaltrials.eu
 
 ```{r Clinicaltrialseumonthlychange}
-
 DT::dataTableOutput("clinicaltrialseu_monthly_change")
-
 ```
 
 :::
@@ -113,33 +104,25 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 ### ClinicalTrials.gov
 
 ```{r nochangeCTG}
-
 DT::dataTableOutput("no_change_nct")
-
 ```
 
 ### ISRCTN
 
 ```{r nochangeISRCTN}
-
 DT::dataTableOutput("no_change_isrctn")
-
 ```
 
 ### NIHR
 
 ```{r nochangeNIHR}
-
 DT::dataTableOutput("no_change_nihr")
-
 ```
 
 ### Clinicaltrials.eu
 
 ```{r nochangeEU}
-
 DT::dataTableOutput("no_change_cteu")
-
 ```
 :::
 </div>
@@ -152,33 +135,25 @@ DT::dataTableOutput("no_change_cteu")
 ### ClinicalTrials.gov
 
 ```{r CTGpubstable}
-
 render_pubmed_table("NCT_PM")
-
 ```
 
 ### ISRCTN
 
 ```{r ISRCTNpubstable}
-
 render_pubmed_table("ISRCTN_PM")
-
 ```
 
 ### NIHR
 
 ```{r NIHRpubstable}
-
 render_pubmed_table("NIHR_PM")
-
 ```
 
 ### Clinicaltrials.eu
 
 ```{r EUpubstable}
-
 render_pubmed_table("EU_PM")
-
 ```
 
 :::
@@ -340,7 +315,7 @@ shiny::mainPanel(shiny::textOutput("success_comment"))
 ```{r CG.govarchive}
 
 DBI::dbReadTable(main_con, "NCT_rxv") |>
-  dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = "")),
+  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
   dplyr::select(
@@ -372,7 +347,7 @@ DBI::dbReadTable(main_con, "NCT_rxv") |>
 ```{r ISRCTNarchivetable}
 
 DBI::dbReadTable(main_con, "ISRCTN_rxv") |>
-  dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = "")),
+  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
   dplyr::select(-Query_Date) |>
@@ -402,7 +377,7 @@ DBI::dbReadTable(main_con, "ISRCTN_rxv") |>
 ```{r NIHRarchivetable}
 
 DBI::dbReadTable(main_con, "NIHR_rxv") |>
-  dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = "")),
+  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
   dplyr::select(-Query_Date) |>
@@ -428,7 +403,7 @@ DBI::dbReadTable(main_con, "NIHR_rxv") |>
 
 DBI::dbReadTable(main_con, "EU_rxv") |>
   dplyr::select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids) |>
-  dplyr::mutate(across(.cols = everything(), .fns = ~ iconv(.x, "UTF-8", "UTF-8", sub = "")),
+  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
   dplyr::select(-Query_Date) |>
@@ -485,7 +460,7 @@ refresh_all_data <- function() {
 }
 
 # Clean UTF function
-clean_utf88 <- function(x){
+clean_utf8 <- function(x){
   iconv(x, "UTF-8", "UTF-8", sub = "")
 }
 
@@ -505,7 +480,7 @@ render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols
     dplyr::left_join(date_added_df, by = rlang::as_string(rlang::ensym(id_col))) |>
     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
     dplyr::select(-Query_Date) |>
-    dplyr::mutate(across(.cols = everything(), .fns = clean_utf88))
+    dplyr::mutate(across(.cols = everything(), .fns = clean_utf8))
 
   if (is.function(extra_mutate)) processed <- extra_mutate(processed)
 
@@ -790,7 +765,7 @@ generate_nochange_table <- function(data, id_col, rename_list, drop_cols = NULL,
   joined <- dplyr::inner_join(current, old, by = names(current)[2:(ncol(current) - 1)], keep = FALSE) |>
     dplyr::select(-contains(".x"), -contains(".y")) |>
     dplyr::left_join(date_added, by = rlang::as_string(rlang::ensym(id_col))) |>
-    dplyr::mutate(across(.cols = everything(), .fns = clean_utf88))
+    dplyr::mutate(across(.cols = everything(), .fns = clean_utf8))
 
   if (!is.null(date_cols)) {
     joined <- joined |>
@@ -904,7 +879,7 @@ render_pubmed_table <- function(table_name) {
   if (!table_name %in% DBI::dbListTables(main_con)) return(NULL)
 
   DBI::dbReadTable(main_con, table_name) |>
-    dplyr::mutate(across(everything(), .fns = clean_utf888)) |>
+    dplyr::mutate(across(everything(), .fns = clean_utf8)) |>
     dplyr::mutate(
       Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
       abstract = stringr::str_trunc(abstract, 200L)
