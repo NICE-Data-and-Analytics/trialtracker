@@ -64,9 +64,11 @@ render_pubmed_table <- function(table_name) {
 
 # Live Trial Info
 
+::: {.value-box}
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
+:::
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -100,9 +102,11 @@ DT::dataTableOutput("live_trial_table_eu")
 
 # Recent Status Changes
 
+::: {.value-box}
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
+:::
 
 **Changes are from 31 days ago**
 
