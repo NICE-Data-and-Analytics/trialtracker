@@ -64,11 +64,8 @@ render_pubmed_table <- function(table_name) {
 
 # Live Trial Info
 
-```{r timestampone, echo=FALSE}
-shiny::tags$div(
-  style = "font-size: 1em; font-weight: bold; margin-bottom: 0.75rem;",
-  shiny::textOutput("timestamp_text")
-)
+```{r}
+shiny::textOutput("timestamp_text")
 ```
 
 <div style="height: 80vh;">
@@ -104,7 +101,7 @@ DT::dataTableOutput("live_trial_table_eu")
 # Recent Status Changes
 
 ```{r}
-shiny::tagList(shiny::tags$strong("Last Updated: "), shiny::textOutput("timestamp_text"))
+shiny::textOutput("timestamp_text")
 ```
 
 **Changes are from 31 days ago**
@@ -142,7 +139,7 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 # No Changes in Last 6m
 
 ```{r}
-shiny::tagList(shiny::tags$strong("Last Updated: "), shiny::textOutput("timestamp_text"))
+shiny::textOutput("timestamp_text")
 ```
 
 <div style="height: 80vh;">
@@ -479,9 +476,8 @@ isrctn_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "ISRCTN"))
 eu_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "EU"))
 nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
 
-# Initialise timestamp and trigger
-last_refreshed <- shiny::reactiveVal(Sys.time())
-refresh_trigger <- shiny::reactiveVal(0)
+# Initialise timestamp 
+last_refreshed <- shiny::reactiveVal(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
 
 # Create output for 'last_updated' timestamp
 output$timestamp_text <- shiny::renderText({
@@ -503,7 +499,7 @@ refresh_all_data <- function() {
   eu_data(DBI::dbReadTable(main_con, "EU"))
   nihr_data(DBI::dbReadTable(main_con, "NIHR"))
 
-  last_refreshed(Sys.time())
+  last_refreshed(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
 }
 
 
