@@ -62,12 +62,12 @@ render_pubmed_table <- function(table_name) {
 
 ```
 
+
 # Live Trial Info
 
 ```{r}
-shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text_live")
 ```
-
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -103,13 +103,10 @@ DT::dataTableOutput("live_trial_table_eu")
 
 **Changes are from 31 days ago**
 
-::: {.row}
-::: {.col}
 ```{r}
-shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text_recents")
 ```
-:::
-:::
+
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
@@ -144,7 +141,7 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 # No Changes in Last 6m
 
 ```{r}
-shiny::textOutput("timestamp_text")
+shiny::textOutput("timestamp_text_no_changes")
 ```
 
 <div style="height: 80vh;">
@@ -485,12 +482,25 @@ nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
 last_refreshed <- shiny::reactiveVal(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
 
 # Create output for 'last_updated' timestamp
-output$timestamp_text <- shiny::renderText({
+output$timestamp_text_live <- shiny::renderText({
   paste(
     "🔄 Last refreshed at:",
     format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
   )
 })
+output$timestamp_text_recents <- shiny::renderText({
+  paste(
+    "🔄 Last refreshed at:",
+    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
+  )
+})
+output$timestamp_text_no_changes <- shiny::renderText({
+  paste(
+    "🔄 Last refreshed at:",
+    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
+  )
+})
+
 
 # Central refresh function
 refresh_all_data <- function() {
