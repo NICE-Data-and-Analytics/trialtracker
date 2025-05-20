@@ -64,13 +64,10 @@ render_pubmed_table <- function(table_name) {
 
 # Live Trial Info
 
-::: {.row}
-::: {.col}
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
-:::
-:::
+
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
