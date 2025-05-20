@@ -690,21 +690,29 @@ refresh_all_data <- function() {
 
 # Shared helper for rendering livetrialinfos
 render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols = NULL, extra_mutate = NULL, extra_filter = NULL) {
-  data_filtered <- data
-  if (!is.null(extra_filter)) data_filtered <- extra_filter(data_filtered)
+  data_filtered <- if (!is.null(extra_filter)) extra_filter(data) else data
 
   date_added_df <- data_filtered |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = {{ id_col }})
 
-  data_filtered |>
+  processed <- data_filtered |>
     dplyr::filter({{ id_col }} %in% ids) |>
     dplyr::left_join(date_added_df, by = rlang::as_string(rlang::ensym(id_col))) |>
     dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
     dplyr::select(-Query_Date) |>
-    dplyr::mutate(across(.cols = everything(), ~ iconv(.x, "UTF-8", "UTF-8", sub = ""))) |>
-    { if (!is.null(extra_mutate)) extra_mutate(.) else . } |>
-    dplyr::rename(!!!rename_list) |>
-    { if (!is.null(reorder_cols)) dplyr::select(., all_of(reorder_cols)) else . } |>
+    dplyr::mutate(across(.cols = everything(), ~ iconv(.x, "UTF-8", "UTF-8", sub = "")))
+
+  if (!is.null(extra_mutate)) processed <- extra_mutate(processed)
+
+  processed <- processed |>
+    dplyr::rename(!!!rename_list)
+
+  if (!is.null(reorder_cols)) {
+    processed <- processed |>
+      dplyr::select(dplyr::all_of(reorder_cols))
+  }
+
+  processed |>
     dplyr::arrange(desc(`Date Added`)) |>
     dplyr::distinct()
 }
