@@ -64,14 +64,14 @@ render_pubmed_table <- function(table_name) {
 
 # Live Trial Info
 
+<div style="height: 80vh;">
+::: {.panel-tabset}
+
 ::: {.value-box}
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
 :::
-
-<div style="height: 80vh;">
-::: {.panel-tabset}
 
 ## ClinicalTrials.gov
 
@@ -102,16 +102,16 @@ DT::dataTableOutput("live_trial_table_eu")
 
 # Recent Status Changes
 
+**Changes are from 31 days ago**
+
+<div style="height: 80vh;">
+::: {.panel-tabset}
+
 ::: {.value-box}
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
 :::
-
-**Changes are from 31 days ago**
-
-<div style="height: 80vh;">
-::: {.panel-tabset}
 
 ### ClinicalTrials.gov
 
@@ -491,7 +491,7 @@ last_refreshed <- shiny::reactiveVal(file.info("inst/extdata/RSQLite_data/TrialT
 #   )
 # })
 
-# Debug version
+# Debug version    
 output$timestamp_text <- shiny::renderText({
   "Test timestamp output rendering"
 })
