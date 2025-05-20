@@ -64,14 +64,18 @@ render_pubmed_table <- function(table_name) {
 
 # Live Trial Info
 
-<div style="height: 80vh;">
-::: {.panel-tabset}
-
-## ClinicalTrials.gov
+::: {.value-box}
 
 ```{r}
 shiny::textOutput("timestamp_text")
 ```
+
+:::
+
+<div style="height: 80vh;">
+::: {.panel-tabset}
+
+## ClinicalTrials.gov
 
 ```{r CTGlive}
 DT::dataTableOutput("live_trial_table_nct")
@@ -79,29 +83,17 @@ DT::dataTableOutput("live_trial_table_nct")
 
 ## ISRCTN
 
-```{r}
-shiny::textOutput("timestamp_text")
-```
-
 ```{r ISCTNlive}
 DT::dataTableOutput("live_trial_table_isrctn")
 ```
 
 ## NIHR
 
-```{r}
-shiny::textOutput("timestamp_text")
-```
-
 ```{r NIHRlive}
 DT::dataTableOutput("live_trial_table_nihr")
 ```
 
 ## Clinicaltrials.eu
-
-```{r}
-shiny::textOutput("timestamp_text")
-```
 
 ```{r EUlive}
 DT::dataTableOutput("live_trial_table_eu")
