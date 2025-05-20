@@ -64,13 +64,12 @@ render_pubmed_table <- function(table_name) {
 
 # Live Trial Info
 
-::: {.value-box}
-**Last Updated:** 
-```{r}
-shiny::textOutput("timestamp_text")
+```{r timestampone, echo=FALSE}
+shiny::tags$div(
+  style = "font-size: 1em; font-weight: bold; margin-bottom: 0.75rem;",
+  shiny::textOutput("timestamp_text")
+)
 ```
-:::
-
 
 <div style="height: 80vh;">
 ::: {.panel-tabset}
