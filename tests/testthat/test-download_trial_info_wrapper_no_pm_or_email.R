@@ -9,12 +9,15 @@ test_that("download_trial_info_wrapper_no_pm_or_email works with default and cus
   mock_update_db_for_ISRCTN_changes <- mock(function(main_con, trial_id_df) {})
   mock_update_db_for_NIHR_changes <- mock(function(main_con, trial_id_df) {})
   mock_update_db_for_EU_changes <- mock(function(main_con, trial_id_df) {})
+  mock_quarto_render <- mock(function(...) NULL)
 
   # Stub the original functions with the mock functions
   stub(download_trial_info_wrapper_no_pm_or_email, "update_db_for_NCT_changes", mock_update_db_for_NCT_changes)
   stub(download_trial_info_wrapper_no_pm_or_email, "update_db_for_ISRCTN_changes", mock_update_db_for_ISRCTN_changes)
   stub(download_trial_info_wrapper_no_pm_or_email, "update_db_for_NIHR_changes", mock_update_db_for_NIHR_changes)
   stub(download_trial_info_wrapper_no_pm_or_email, "update_db_for_EU_changes", mock_update_db_for_EU_changes)
+  stub(download_trial_info_wrapper_no_pm_or_email, "quarto::quarto_render", mock_quarto_render)
+
 
   #Test trial_id_df
   trial_id_df <- tibble::tibble(
