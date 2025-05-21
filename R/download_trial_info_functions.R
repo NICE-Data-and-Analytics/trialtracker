@@ -33,6 +33,7 @@ concat_ids <- function(df, id_col) {
     )
   }
 }
+
 #' Collapse IDs for API URL Construction
 #'
 #' This internal function collapses IDs from a specified column in a dataframe into a single string, separated by a specified delimiter. It is used for constructing API URLs.

@@ -97,3 +97,4 @@ rename_ng_to_other <- function(table_name, main_con) {
 
   DBI::dbWriteTable(main_con, name = table_name, value = tab_new, overwrite = TRUE)
 }
+
