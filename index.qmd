@@ -207,10 +207,11 @@ render_pubmed_table("EU_PM")
 
 # Add/Remove Trials and Trial Comments
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### Add Trial
+
+<div style="max-height: 80vh; overflow-y: auto;">
 
 There are two ways to add trials:
 
@@ -257,7 +258,11 @@ shiny::mainPanel(shiny::uiOutput("single_result"))
 
 ```
 
+</div>
+
 ### Add Multiple Trials
+
+<div style="max-height: 80vh; overflow-y: auto;">
 
 ```{r AddMultiTrial}
 
@@ -281,7 +286,11 @@ shiny::mainPanel(
 
 ```
 
+</div>
+
 ### Remove or Archive Trial
+
+<div style="max-height: 80vh; overflow-y: auto;">
 
 Select relevant registry and trial ID reference number below, along with any comments if archiving.
 
@@ -314,7 +323,11 @@ shiny::mainPanel(shiny::textOutput("success_delete"),
 
 ```
 
+</div>
+
 ### Trial Comments
+
+<div style="max-height: 80vh; overflow-y: auto;">
 
 Select trial and amend comments in the box below
 
@@ -346,9 +359,9 @@ shiny::mainPanel(shiny::textOutput("success_comment"))
 
 ```
 
-:::
-
 </div>
+
+:::
 
 # Archived Trials
 
