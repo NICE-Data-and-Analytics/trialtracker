@@ -1090,7 +1090,7 @@ exp_delete <- shiny::reactive({
     main_con,
     sql_delete,
     ColID = DBI::SQL(dplyr::case_when(
-      input$registry_remove == "NIHR_Ids" ~ "REPLACE(REPLACE(NIHR_Ids, '-', ''),'/','')",
+      input$registry_remove == "NIHR_Ids" ~ "REPLACE(NIHR_Ids, '-', '')",
       TRUE ~ input$registry_remove
     )),
     ID_Selected = if (input$registry_remove == "NIHR_Ids") {
