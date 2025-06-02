@@ -69,7 +69,6 @@ render_pubmed_table <- function(table_name) {
 shiny::textOutput("timestamp_text_live")
 ```
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ## ClinicalTrials.gov
@@ -97,7 +96,6 @@ DT::dataTableOutput("live_trial_table_eu")
 ```
 
 :::
-</div>
 
 # Recent Status Changes
 
@@ -108,7 +106,6 @@ shiny::textOutput("timestamp_text_recents")
 ```
 
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov
@@ -136,7 +133,7 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 ```
 
 :::
-</div>
+
 
 # No Changes in Last 6m
 
@@ -144,7 +141,6 @@ DT::dataTableOutput("clinicaltrialseu_monthly_change")
 shiny::textOutput("timestamp_text_no_changes")
 ```
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov
@@ -170,12 +166,12 @@ DT::dataTableOutput("no_change_nihr")
 ```{r nochangeEU}
 DT::dataTableOutput("no_change_cteu")
 ```
+
 :::
-</div>
+
 
 # Pubmed Publications
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### ClinicalTrials.gov
@@ -203,14 +199,16 @@ render_pubmed_table("EU_PM")
 ```
 
 :::
-</div>
 
 # Add/Remove Trials and Trial Comments
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### Add Trial
+
+::: {.grid}
+
+::: {.g-col-12 g-col-md-6}
 
 There are two ways to add trials:
 
@@ -223,6 +221,10 @@ There are two ways to add trials:
 -   ISRCTN - "ISRCTN11735271"
 -   NIHR - "14-158-02" or "14/158/02" or "RP-PG-0109-10056"
 -   Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
+
+:::
+
+::: {.g.col-12 g-col-md-6}
 
 ```{r AddSingleTrial}
 
@@ -348,11 +350,7 @@ shiny::mainPanel(shiny::textOutput("success_comment"))
 
 :::
 
-</div>
-
 # Archived Trials
-
-<div style="height: 80vh;">
 
 ::: {.panel-tabset}
 
@@ -467,8 +465,6 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 ```
 
 :::
-
-</div>
 
 ```{r ServerCodeUpdates, context = "server"}
 
