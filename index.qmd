@@ -207,7 +207,6 @@ render_pubmed_table("EU_PM")
 
 # Add/Remove Trials and Trial Comments
 
-<div style="height: 80vh;">
 ::: {.panel-tabset}
 
 ### Add Trial
@@ -226,58 +225,83 @@ There are two ways to add trials:
 
 ```{r AddSingleTrial}
 
-shiny::inputPanel(
-  shiny::h3("Add Single Trial"),
-  shiny::radioButtons(
-    "registry_add",
-    label = "",
-    choices = c(
-      "Clinicaltrials.gov" = "NCT_Ids",
-      "ISRCTN" = "ISRCTN_Ids",
-      "NIHR" = "NIHR_Ids",
-      "Clinicaltrials.eu" = "EU_Ids"
+## Columns aren't working (tabset?) but it is more spaced out which is better
+
+shiny::fluidPage(
+
+shiny::fluidRow(
+  shiny::column(12, shiny::h3("Add Single Trial")),
+
+  # Left Column
+  shiny::column(6,
+    shiny::radioButtons(
+      "registry_add",
+      label = "Select Registry",
+      choices = c(
+        "Clinicaltrials.gov" = "NCT_Ids",
+        "ISRCTN" = "ISRCTN_Ids",
+        "NIHR" = "NIHR_Ids",
+        "Clinicaltrials.eu" = "EU_Ids"
+      )
+    ),
+    shiny::selectInput(
+      "guideline_program_add",
+      label = "Enter program description",
+      choices = c("COVID", "IP", "Other"),
+      selected = "COVID"
     )
   ),
-  shiny::selectInput(
-    "guideline_program_add",
-    label = "Enter program description",
-    choices = c("COVID", "IP", "Other"),
-    selected = "COVID"
-  ),
-  shiny::textInput(
-    "guideline_reference_add",
-    label = "Enter guideline number(s)",
-    placeholder = "e.g. CG179"
-  ),
-  shiny::textInput("ID_add", label = "Enter Trial ID reference number", placeholder = " e.g. NCT03597750"),
-  shiny::textInput("URL_add", label = "Paste URL to trial page in registry", placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750"),
-  shiny::actionButton("button_add", "Add trial")
-)
-shiny::mainPanel(shiny::uiOutput("single_result"))
 
+  # Right Column
+  shiny::column(6,
+    shiny::textInput(
+      "guideline_reference_add",
+      label = "Enter guideline number(s)",
+      placeholder = "e.g. CG179"
+    ),
+    shiny::textInput("ID_add", label = "Enter Trial ID reference number", placeholder = "e.g. NCT03597750"),
+    shiny::textInput("URL_add", label = "Paste URL to trial page in registry", placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750")
+  ),
+
+  # Full-width Add Button
+  shiny::column(12, shiny::actionButton("button_add", "Add trial"))
+),
+shiny::uiOutput("single_result")
+)
 ```
 
 ### Add Multiple Trials
 
 ```{r AddMultiTrial}
 
-shiny::inputPanel(
-  shiny::h3("Add Multiple Trials via csv file"),
-  shiny::downloadButton("downloadtemplate", label = "Download template"),
-  shiny::fileInput(
-    "uploadtemplate",
-    label = "Upload completed template",
-    multiple = FALSE,
-    accept = ".csv"
+shiny::fluidRow(
+  shiny::column(12, shiny::h3("Add Multiple Trials via CSV File")),
+
+  shiny::column(6,
+    shiny::downloadButton("downloadtemplate", label = "Download template")
   ),
-  shiny::actionButton("button_add_multi", label = "Add trial spreadsheet")
+
+  shiny::column(6,
+    shiny::fileInput(
+      "uploadtemplate",
+      label = "Upload completed template",
+      multiple = FALSE,
+      accept = ".csv"
+    )
+  ),
+
+  shiny::column(12,
+    shiny::actionButton("button_add_multi", label = "Add trial spreadsheet")
+  ),
+
+  shiny::column(12,
+    shiny::uiOutput("multi_result"),
+    shiny::textOutput("multi_error"),
+    shiny::textOutput("multi_fail"),
+    shiny::textOutput("multi_success")
+  )
 )
-shiny::mainPanel(
-  shiny::uiOutput("multi_result"),
-  shiny::textOutput("multi_error"),
-  shiny::textOutput("multi_fail"),
-  shiny::textOutput("multi_success")
-)
+
 
 ```
 
@@ -289,28 +313,50 @@ Select relevant registry and trial ID reference number below, along with any com
 
 ```{r Removetab}
 
-shiny::inputPanel(
-  shiny::h3("Remove or Archive Trial"),
-  shiny::radioButtons(
-    "registry_remove",
-    label = "Registry",
-    choices = c(
-      "Clinicaltrials.gov" = "NCT_Ids",
-      "ISRCTN" = "ISRCTN_Ids",
-      "NIHR" = "NIHR_Ids",
-      "Clinicaltrials.eu" = "EU_Ids"
+shiny::fluidRow(
+  shiny::column(12, shiny::h3("Remove or Archive Trial")),
+
+  # Registry selection
+  shiny::column(6,
+    shiny::radioButtons(
+      "registry_remove",
+      label = "Registry",
+      choices = c(
+        "Clinicaltrials.gov" = "NCT_Ids",
+        "ISRCTN" = "ISRCTN_Ids",
+        "NIHR" = "NIHR_Ids",
+        "Clinicaltrials.eu" = "EU_Ids"
+      )
     )
   ),
-  shiny::selectInput("ID_remove", label = "Select Trial ID reference number", choices = ""),
-  #shiny::textOutput("choices_list"),
-  shiny::actionButton("button_delete", "Delete trial"),
-  shiny::textInput("comments_archive", "Archive Comments"),
-  shiny::actionButton("button_archive", "Archive trial"),
-  shiny::downloadButton("button_download_dbs", label = "Download SQLite data")
-)
 
-shiny::mainPanel(shiny::textOutput("success_delete"),
-                 shiny::textOutput("success_archive"))
+  # Trial ID selection
+  shiny::column(6,
+    shiny::selectInput("ID_remove", label = "Select Trial ID reference number", choices = "")
+    # shiny::textOutput("choices_list")  # Optional debug output
+  ),
+
+  # Action buttons
+  shiny::column(6,
+    shiny::actionButton("button_delete", "Delete trial")
+  ),
+
+  shiny::column(6,
+    shiny::textInput("comments_archive", "Archive Comments"),
+    shiny::actionButton("button_archive", "Archive trial")
+  ),
+
+  # Download button
+  shiny::column(12,
+    shiny::downloadButton("button_download_dbs", label = "Download SQLite data")
+  ),
+
+  # Output messages
+  shiny::column(12,
+    shiny::textOutput("success_delete"),
+    shiny::textOutput("success_archive")
+  )
+)
 
 ```
 
@@ -320,35 +366,52 @@ Select trial and amend comments in the box below
 
 ```{r TrialComments}
 
-shiny::inputPanel(
-  shiny::h3("Add/Amend Trial Comments"),
-  shiny::radioButtons(
-    "registry_comment",
-    label = "Registry",
-    choices = c(
-      "Clinicaltrials.gov" = "NCT_Ids",
-      "ISRCTN" = "ISRCTN_Ids",
-      "NIHR" = "NIHR_Ids",
-      "Clinicaltrials.eu" = "EU_Ids"
+shiny::fluidRow(
+  shiny::column(12, shiny::h3("Add or Amend Trial Comments")),
+
+  # Registry selection
+  shiny::column(6,
+    shiny::radioButtons(
+      "registry_comment",
+      label = "Registry",
+      choices = c(
+        "Clinicaltrials.gov" = "NCT_Ids",
+        "ISRCTN" = "ISRCTN_Ids",
+        "NIHR" = "NIHR_Ids",
+        "Clinicaltrials.eu" = "EU_Ids"
+      )
     )
   ),
-  shiny::selectInput("ID_comment", label = "Select Trial ID reference number", choices = ""),
-  shiny::textAreaInput(
-    "trial_comments",
-    label = "Comments",
-    placeholder = "Trial Comments",
-    resize = "both"
-  ),
-  shiny::actionButton("button_comment", "Amend Comments")
-)
 
-shiny::mainPanel(shiny::textOutput("success_comment"))
+  # Trial ID selection
+  shiny::column(6,
+    shiny::selectInput("ID_comment", label = "Select Trial ID reference number", choices = "")
+  ),
+
+  # Comments input
+  shiny::column(12,
+    shiny::textAreaInput(
+      "trial_comments",
+      label = "Comments",
+      placeholder = "Trial Comments",
+      resize = "both"
+    )
+  ),
+
+  # Action button
+  shiny::column(12,
+    shiny::actionButton("button_comment", "Amend Comments")
+  ),
+
+  # Output message
+  shiny::column(12,
+    shiny::textOutput("success_comment")
+  )
+)
 
 ```
 
 :::
-
-</div>
 
 # Archived Trials
 
