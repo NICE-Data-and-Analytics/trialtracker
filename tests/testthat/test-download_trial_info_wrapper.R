@@ -22,10 +22,10 @@ test_that("download_trial_info_wrapper calls the correct functions with the corr
     Guideline.number = c("G1", "G2"),
     URL = c("http://example.com/a", "http://example.com/b"),
     EU_Ids = c("2024-123456-12", "2023-654321-34"),
-    `Short..working.title.` = c('Bibbety Bobbity', 'Boo'),
-    NCT_Ids = c('NCT12345678', 'NCT87654321'),
-    ISRCTN_Ids = c('ISRCTN123456', 'ISRCTN654321'),
-    NIHR_Ids = c('X1234', 'ABC765')
+    `Short..working.title.` = c("Bibbety Bobbity', 'Boo"),
+    NCT_Ids = c("NCT12345678", "NCT87654321"),
+    ISRCTN_Ids = c("ISRCTN123456", "ISRCTN654321"),
+    NIHR_Ids = c("X1234", "ABC765")
   )
 
   # Test with mocked DBI functions (default parameters)

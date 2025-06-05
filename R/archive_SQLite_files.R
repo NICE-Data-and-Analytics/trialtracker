@@ -1,8 +1,13 @@
 #' Create a Monthly Backup of SQLite Database Files
 #'
-#' This function creates a monthly backup of the SQLite database files. It ensures that a directory for storing monthly backups exists, creates a subdirectory for the current month, and copies the SQLite files to this subdirectory.
+#' This function creates a monthly backup of the SQLite database files. It
+#' ensures that a directory for storing monthly backups exists, creates a
+#' subdirectory for the current month, and copies the SQLite files to this
+#' subdirectory.
 #'
-#' @param backup_subdirectory_path A character string specifying the path to the directory where monthly backups will be stored. Defaults to "inst/extdata/monthly_SQLite_backup".
+#' @param backup_subdirectory_path A character string specifying the path to the directory
+#' where monthly backups will be stored.
+#' Defaults to "inst/extdata/monthly_SQLite_backup".
 #' @return None. The function is called for its side effects.
 #' @examples
 #' backup_SQLite_db()

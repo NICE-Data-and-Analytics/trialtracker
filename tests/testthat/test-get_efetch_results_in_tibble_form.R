@@ -13,7 +13,7 @@ mock_get_efetch_results <- function(pmid, api_object) {
 # Mocking the return_pm_df function
 mock_return_pm_df <- function(df, search_term) {
   df$search_term <- search_term
-  return(df)
+  df
 }
 
 # Replacing the actual functions with mocks

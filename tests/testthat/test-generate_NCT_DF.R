@@ -26,8 +26,7 @@ test_that("generate_NCT_DF works correctly", {
   )))
 
   # Mock the read_json function to return the mock response
-  stub(generate_NCT_DF, "jsonlite::read_json", function(...)
-    mock_response)
+  stub(generate_NCT_DF, "jsonlite::read_json", function(...) mock_response)
 
   # Test 1: Basic Functionality
   api_url <- "https://clinicaltrials.gov/api/v2/studies?format=json&filter.ids=NCT03146143&fields=NCTId%7COrgStudyId%7CCondition%7CBriefTitle%7CAcronym%7COverallStatus%7CPrimaryCompletionDate%7CCompletionDate%7CResultsFirstSubmitDate%7CResultsFirstPostDate%7CLastUpdatePostDate%7CSeeAlsoLinkURL&pageSize=1000"
@@ -51,8 +50,7 @@ test_that("generate_NCT_DF works correctly", {
 
   # Test 2: Empty Response
   mock_response_empty <- list(studies = list())
-  stub(generate_NCT_DF, "jsonlite::read_json", function(...)
-    mock_response_empty)
+  stub(generate_NCT_DF, "jsonlite::read_json", function(...) mock_response_empty)
   df_empty <- generate_NCT_DF(api_url)
   expect_equal(
     df_empty,
@@ -77,8 +75,7 @@ test_that("generate_NCT_DF works correctly", {
   mock_response_missing_fields <- list(studies = list(list(
     protocolSection = list(identificationModule = list(nctId = "NCT03146143"))
   )))
-  stub(generate_NCT_DF, "jsonlite::read_json", function(...)
-    mock_response_missing_fields)
+  stub(generate_NCT_DF, "jsonlite::read_json", function(...) mock_response_missing_fields)
   df_missing_fields <- generate_NCT_DF(api_url)
   expected_df_missing_fields <- tibble::tibble(
     Rank = 1,
@@ -99,8 +96,7 @@ test_that("generate_NCT_DF works correctly", {
 
 
   # Test 4: Invalid URL returns empty tibble with correct structure
-  stub(generate_NCT_DF, "jsonlite::read_json", function(...)
-    stop("Invalid URL"))
+  stub(generate_NCT_DF, "jsonlite::read_json", function(...) stop("Invalid URL"))
   df_invalid <- generate_NCT_DF("invalid_url")
 
   # Check that the result is a tibble with 0 rows

@@ -6,7 +6,7 @@ test_that("generate_tt_email works correctly", {
   # Setup test params
   test_root <- rprojroot::find_root(rprojroot::is_testthat)
   program <- "COVID"
-  attachments <- dir(file.path(test_root, 'test_data'),
+  attachments <- dir(file.path(test_root, "test_data"),
                      full.names = TRUE) |>
     stringr::str_subset("_COVID_")
   devs <- readLines("c:/RStudio_Projects/Trialtracker/secrets/devs.csv")
@@ -58,7 +58,7 @@ test_that("generate_tt_email works correctly", {
   expect_equal(length(email$parts) - 1, 0)
 
   # Now Test live version
-  attachments <- dir(file.path(test_root, 'test_data'),
+  attachments <- dir(file.path(test_root, "test_data"),
                      full.names = TRUE) |>
     stringr::str_subset("_COVID_")
 

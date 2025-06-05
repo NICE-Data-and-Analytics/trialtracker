@@ -7,26 +7,24 @@ loadNamespace("RSQLite")
 test_that("update_db_for_NCT_changes works correctly", {
   # Mock functions
   mock_concat_ids <- function(trial_id_df, column_name) {
-    return(trial_id_df[[column_name]])
+    trial_id_df[[column_name]]
   }
 
   mock_generate_NCT_URL <- function(NCT_Id_Vector) {
-    return(paste0("https://clinicaltrials.gov/api/query/full_studies?expr=", paste(NCT_Id_Vector, collapse = "+OR+")))
+    paste0("https://clinicaltrials.gov/api/query/full_studies?expr=", paste(NCT_Id_Vector, collapse = "+OR+"))
   }
 
   mock_generate_NCT_DF <- function(NCT_URL) {
-    return(tibble::tibble(
+    tibble::tibble(
       NCTId = c("NCT123", "NCT456"),
       Title = c("Study 1", "Study 2"),
       Status = c("Completed", "Recruiting"),
       Rank = c(1,2)
-    ))
+    )
   }
 
   mock_update_db <- function(con, table_name, data) {
     # Mock function to simulate database update
-    #print("Data to be inserted into the database:")
-    #print(data)
     DBI::dbWriteTable(con, table_name, data, append = TRUE, row.names = FALSE)
   }
 
@@ -56,8 +54,6 @@ test_that("update_db_for_NCT_changes works correctly", {
 
   # Check if the database was updated correctly
   result <- DBI::dbReadTable(mock_con, "NCT")
-  #print("Database Result:")
-  #print(result)
   expect_equal(nrow(result), 2)
   expect_equal(result$NCTId, c("NCT123", "NCT456"))
   expect_equal(result$Title, c("Study 1", "Study 2"))

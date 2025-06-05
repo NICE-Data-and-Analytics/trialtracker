@@ -1,6 +1,8 @@
 #' Concatenate Trial IDs for API URL Construction
 #'
-#' This internal function concatenates Trial IDs from a specified column in a dataframe, ensuring no missing or duplicate values. It is used for constructing API URLs.
+#' This internal function concatenates Trial IDs from a specified column in a
+#' dataframe, ensuring no missing or duplicate values. It is used for
+#' constructing API URLs.
 #'
 #' @param df A dataframe containing the IDs.
 #' @param id_col A string specifying the column name that contains the IDs.
@@ -36,7 +38,9 @@ concat_ids <- function(df, id_col) {
 
 #' Collapse IDs for API URL Construction
 #'
-#' This internal function collapses IDs from a specified column in a dataframe into a single string, separated by a specified delimiter. It is used for constructing API URLs.
+#' This internal function collapses IDs from a specified column in a dataframe
+#' into a single string, separated by a specified delimiter. It is used for
+#' constructing API URLs.
 #'
 #' @param df A dataframe containing the IDs.
 #' @param id_col A string specifying the column name that contains the IDs.
@@ -50,10 +54,13 @@ collapse_ids <- function(df, id_col, paste_collapse) {
 
 #' Create a List of IDs for API Call
 #'
-#' This internal function generates a list of unique, non-missing IDs from a specified column in a dataframe. It is used to prepare IDs for inclusion in an API call.
+#' This internal function generates a list of unique, non-missing IDs from a
+#' specified column in a dataframe. It is used to prepare IDs for inclusion in
+#' an API call.
 #'
 #' @param trial_id_df A dataframe containing the trial IDs.
-#' @param registry A string specifying the registry name, which is used to construct the column name containing the IDs.
+#' @param registry A string specifying the registry name, which is used to
+#' construct the column name containing the IDs.
 #' @return A vector of unique, non-missing IDs.
 #' @importFrom dplyr select distinct if_any filter pull all_of everything
 #' @importFrom tidyr drop_na
@@ -75,7 +82,11 @@ create_search_list <- function(trial_id_df, registry) {
 
 #' Updates the SQLite Database with API Call Information
 #'
-#' This function updates the specified SQLite database table with new data from an API call. If the table does not exist, it creates the table and appends the data. If the table exists, it appends the data only if there are no entries for the current date. If entries for the current date exist, it overwrites the table with entries from previous dates and then appends the new data.
+#' This function updates the specified SQLite database table with new data from an API call.
+#' If the table does not exist, it creates the table and appends the data. If the table exists,
+#' it appends the data only if there are no entries for the current date. If entries for the
+#' current date exist, it overwrites the table with entries from previous dates and then appends
+#' the new data.
 #'
 #' @param main_con A DBI connection object to the SQLite database.
 #' @param registry A string specifying the name of the registry (table) to update.
@@ -143,7 +154,7 @@ generate_NCT_URL <- function(NCT_ID_Vec) {
       "&pageSize=1000"
     )
 
-  return(api_url)
+  api_url
 }
 
 #' Generate Formatted Tibble from ClinicalTrials.gov API Call URL
@@ -607,7 +618,7 @@ download_trial_info_wrapper_no_pm_or_email <- function(
   update_db_for_NIHR_changes(main_con = main_con, trial_id_df = trial_id_df)
   update_db_for_EU_changes(main_con = main_con, trial_id_df = trial_id_df)
 
-    # Re-render the Quarto file
+  # Re-render the Quarto file
   quarto::quarto_render("index.qmd")
 
 }

@@ -7,25 +7,23 @@ loadNamespace("RSQLite")
 test_that("update_db_for_ISRCTN_changes works correctly", {
   # Mock functions
   mock_concat_ids <- function(trial_id_df, column_name) {
-    return(trial_id_df[[column_name]])
+    trial_id_df[[column_name]]
   }
 
   mock_generate_ISRCTN_URL <- function(ISRCTN_Id_Vector) {
-    return(paste0("https://www.isrctn.com/api/query/format/who?q=", paste(ISRCTN_Id_Vector, collapse = "%20OR%20")))
+    paste0("https://www.isrctn.com/api/query/format/who?q=", paste(ISRCTN_Id_Vector, collapse = "%20OR%20"))
   }
 
   mock_generate_ISRCTN_df <- function(ISRCTN_URL) {
-    return(tibble::tibble(
+    tibble::tibble(
       ISRCTN_No = c("ISRCTN12345", "ISRCTN67890"),
       Public_Title = c("Study 1", "Study 2"),
       URL = c("https://www.isrctn.com/ISRCTN12345", "https://www.isrctn.com/ISRCTN67890")
-    ))
+    )
   }
 
   mock_update_db <- function(con, table_name, data) {
     # Mock function to simulate database update
-    # print("Data to be inserted into the database:")
-    # print(data)
     DBI::dbWriteTable(con, table_name, data, append = TRUE, row.names = FALSE)
   }
 
@@ -52,8 +50,6 @@ test_that("update_db_for_ISRCTN_changes works correctly", {
   )
 
   result <- DBI::dbReadTable(mock_con, "ISRCTN")
-  # print("Database Result (Valid Input):")
-  # print(result)
   expect_equal(nrow(result), 2)
   expect_equal(result$ISRCTN_No, c("ISRCTN12345", "ISRCTN67890"))
   expect_equal(result$Public_Title, c("Study 1", "Study 2"))
@@ -74,8 +70,6 @@ test_that("update_db_for_ISRCTN_changes works correctly", {
   )
 
   result_empty <- DBI::dbReadTable(mock_con, "ISRCTN")
-  # print("Database Result (Empty Input):")
-  # print(result_empty)
   expect_equal(nrow(result_empty), 2)  # Should remain the same as previous valid input
 
   # Clean up

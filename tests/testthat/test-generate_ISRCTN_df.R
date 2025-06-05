@@ -2,7 +2,7 @@ library(testthat)
 library(httr2)
 
 # Mock XML response
-mock_xml <- '
+mock_xml <- "
 <trials>
   <trial>
     <trial_id>ISRCTN27106947</trial_id>
@@ -17,7 +17,7 @@ mock_xml <- '
     <results_date_posted>2023-02-01</results_date_posted>
     <results_date_first_publication>2023-03-01</results_date_first_publication>
   </trial>
-</trials>'
+</trials>"
 
 # Define the test
 test_that("generate_ISRCTN_df works correctly", {
