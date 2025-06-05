@@ -412,7 +412,6 @@ update_all_pubmed_tables <- function(registries = c("NCT", "ISRCTN", "NIHR", "EU
 update_db_for_NCT_changes <- function(main_con,
                                       trial_id_df) {
   # Collapse Trial ID numbers into search term
-  #print(trial_id_df)
   half_NCT_Id_Vector <- round(length(concat_ids(trial_id_df, "NCT_Ids")) / 2, 0)
   NCT_Id_Vector1 <- concat_ids(trial_id_df, "NCT_Ids")[1:half_NCT_Id_Vector]
   NCT_Id_Vector2 <- concat_ids(trial_id_df, "NCT_Ids")[(half_NCT_Id_Vector + 1):length(concat_ids(trial_id_df, "NCT_Ids"))]
@@ -541,7 +540,6 @@ update_db_for_NIHR_changes <- function(main_con, trial_id_df) {
 #' @importFrom nodbi src_sqlite
 #' @export
 update_db_for_EU_changes <- function(main_con, trial_id_df) {
-  #print("Inside update_db_for_EU_changes")
 
   # Create vector of EU Ids
   EU_Vector <- collapse_ids(trial_id_df, "EU_Ids", "+OR+")

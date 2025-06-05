@@ -20,9 +20,6 @@ test_that("generate_pubmed_results_from_search_terms_and_update_db_one_registry 
   }
 
   mock_update_db <- function(con, table_name, data) {
-    # Debugging print statement
-    # print("Data to be inserted into the database:")
-    # print(data)
 
     # Insert data into the database
     DBI::dbWriteTable(con, table_name, data, append = TRUE, row.names = FALSE)
@@ -57,14 +54,7 @@ test_that("generate_pubmed_results_from_search_terms_and_update_db_one_registry 
     maxdate = "2023-02-01"
   )
 
-  # Debugging print statements
-  # search_list <- mock_create_search_list(trial_id_df, "ISRCTN")
-  # print("Search List:")
-  # print(search_list)
-
   pm_tibble <- mock_generate_pm_tibble_from_search_term_series(search_list, "mock_api_key", "2023-01-01", "2023-02-01")
-  # print("PM Tibble:")
-  # print(pm_tibble)
 
   if (nrow(pm_tibble) > 0) {
     pm_tibble <- pm_tibble |>
@@ -72,16 +62,12 @@ test_that("generate_pubmed_results_from_search_terms_and_update_db_one_registry 
       dplyr::select(Program, Guideline.number, dplyr::everything()) |>
       dplyr::select(-all_of(c("NIHR_Ids", "EU_Ids", "NCT_Ids"))) |>
       dplyr::distinct()
-    #print("Joined Tibble:")
-    #print(pm_tibble)
   } else {
     print("PM Tibble is empty.")
   }
 
   # Check if the database was updated correctly
   result <- DBI::dbReadTable(mock_con, "ISRCTN_PM")
-  # print("Database Result:")
-  # print(result)
   expect_equal(nrow(result), 2)
   expect_equal(result$ID, c("12345", "67890"))
   expect_equal(result$Title, c("Study 1", "Study 2"))

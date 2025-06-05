@@ -19,7 +19,7 @@ test_that("update_db_for_NCT_changes works correctly", {
       NCTId = c("NCT123", "NCT456"),
       Title = c("Study 1", "Study 2"),
       Status = c("Completed", "Recruiting"),
-      Rank = c(1,2)
+      Rank = c(1, 2)
     )
   }
 

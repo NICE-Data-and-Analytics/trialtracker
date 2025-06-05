@@ -17,9 +17,6 @@ test_that("return_pm_df works with valid inputs", {
   search_term <- "cancer"
   result <- return_pm_df(single_id_query_results, search_term)
 
-  # Print the result for debugging
-  #print(result)
-
   # Expected result with fixed date
   fixed_date <- as.Date("2024-11-06")
   expected_result <- tibble::tibble(

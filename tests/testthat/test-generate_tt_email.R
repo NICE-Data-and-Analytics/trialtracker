@@ -104,4 +104,3 @@ test_that("generate_tt_email works correctly", {
   # Check (lack of) attachments
   expect_equal(length(email$parts) - 1, 0)
 })
-

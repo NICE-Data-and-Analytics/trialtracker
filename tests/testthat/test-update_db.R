@@ -7,7 +7,7 @@ test_that("update_db works correctly", {
   main_con <- dbConnect(RSQLite::SQLite(), ":memory:")
 
   # Test 1: Table Creation
-  DF1 <- data.frame(Query_Date = as.numeric(Sys.Date()-1), Value = 1:5)
+  DF1 <- data.frame(Query_Date = as.numeric(Sys.Date() - 1), Value = 1:5)
   update_db(main_con, "example_registry", DF1)
   expect_true("example_registry" %in% dbListTables(main_con))
   expect_equal(dbReadTable(main_con, "example_registry"), DF1)

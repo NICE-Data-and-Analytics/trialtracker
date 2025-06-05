@@ -35,8 +35,6 @@ test_that("generate_pm_tibble_from_search_term returns expected tibble", {
 
   result <- trialtracker::generate_pm_tibble_from_search_term(search_term, api_object, mindate, maxdate)
 
-  #print(result)  # Debugging statement
-
   expect_s3_class(result, "tbl_df")
   expect_equal(nrow(result), 2)
   expect_equal(result$pmid, c("12345678", "87654321"))
@@ -78,8 +76,6 @@ test_that("generate_pm_tibble_from_search_term handles invalid input gracefully"
   maxdate <- Sys.Date() - 1
 
   result <- trialtracker::generate_pm_tibble_from_search_term(search_term, api_object, mindate, maxdate)
-
-  #print(result)  # Debugging statement
 
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) == 0)
