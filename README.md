@@ -10,7 +10,7 @@ To install the *package* and provide the functions install from the repo via `re
 
 ## Folder Structure
 
-**Flexdashboard.rmd** - Is the flexdashboard file which is the dashboard front-end
+**index.qmd** - Is the quarto file which is the dashboard front-end
 **data** - folder that holds the underlying SQLite databases for the various registries and pubmed (in subdirectory RSQLite_data), the generated email attachments (in subdirectory email_attachments), and the monthly backup (subdirectory monthly_SQLite_backup)
 **man** - documentation for each of the functions
 **R** - files containing the functions
