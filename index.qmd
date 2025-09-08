@@ -1061,7 +1061,7 @@ output$downloadtemplate <- shiny::downloadHandler(
 # Reactive for multiple uploads
 to_add <- shiny::reactive({
   inFile <- input$uploadtemplate
-  upload <- readr::read_csv(file = inFile$datapath, col_types = cols(.default = col_character()))
+  upload <- readr::read_csv(file = inFile$datapath, col_types = readr::cols(.default = col_character()))
 })
 
 # Multiple upload logic
