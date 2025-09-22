@@ -7,7 +7,6 @@ format:
     css: styles.css
     output-file: "index.html"
 server: shiny
-brand: _brand.yml
 ---
 
 ```{r setup, context = "server"}

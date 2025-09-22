@@ -22,10 +22,12 @@ mock_xml <- "
 # Define the test
 test_that("generate_ISRCTN_df works correctly", {
   with_mocked_responses(list(
-    "https://www.isrctn.com/api/query/format/who?q=ISRCTN27106947" = response(
+    httr2::response(
       status_code = 200,
+      url     = "https://www.isrctn.com/api/query/format/who?q=ISRCTN27106947",
+      method  = "GET",
       headers = list("Content-Type" = "application/xml"),
-      body = mock_xml
+      body    = charToRaw(mock_xml)
     )
   ), {
     # Call the function with the mocked URL

@@ -27,16 +27,17 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 #Data files
-Data_Files
-Email_Attachments
+email_attachments
 RSQLite_Data
+monthly_SQLite_backup
 #Logs
 Download_Trial_Info.log
 # Google analytics script
 GA_Script.html
-surveillance_import_Oct22_NIHR.csv
-Secrets
-Monthly_SQLite_backup
+secrets
 .Rproj.user
 .lintr
 .Rbuildignore
+inst/*
+index.html
+index_files
