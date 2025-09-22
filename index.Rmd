@@ -24,7 +24,7 @@ last_refreshed <- reactiveVal({
 
 # Poll the DB file periodically and refresh the reactive timestamp
 observe({
-  invalidateLater(60 * 1000, session)  # every 60s; tie timer to the session
+  invalidateLater(10 * 1000, session)  # every 10s; tie timer to the session
   if (file.exists(db_path)) {
     new_ts <- file.info(db_path)$mtime
     # Only update if it actually changed (avoids unnecessary reactivity)
@@ -1162,7 +1162,7 @@ shiny::observeEvent(input$button_add_multi, {
     output$multi_result <- shiny::renderText({
       shiny::HTML(as.character(div(
         style = "color: green;",
-        "Multiple Trials Added! - please refresh browser to see trial details on Live Trial Info tab"
+        "Multiple Trials Added! - Trials should appear on Live Trial Info tab in 10 seconds. If not, please refresh browser"
       )))
     })
   } else if (length(multi_errors) > 0L) {
@@ -1272,7 +1272,7 @@ shiny::observeEvent(input$button_archive, {
   shinybusy::remove_modal_spinner()
 
   # return some success message
-  output$success_archive <- shiny::renderText("Trial Successfully Archived. It should disappear from live lists and appear in archive on browser refresh")
+  output$success_archive <- shiny::renderText("Trial Successfully Archived. It should disappear from live lists but if not please try refreshing browser")
 })
 
 # Server code for 'download SQLite databases' button
