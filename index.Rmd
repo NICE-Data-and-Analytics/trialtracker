@@ -76,6 +76,14 @@ render_pubmed_table <- function(table_name) {
 
 ```
 
+```{css, echo=FALSE}
+#button_download_dbs.btn,
+#downloadtemplate.btn {
+  width: auto !important;
+  min-width: 0;
+}
+```
+
 Live Trial Info
 ======================================================
 
@@ -206,7 +214,7 @@ render_pubmed_table("NIHR_PM")
 render_pubmed_table("EU_PM")
 ```
 
-Add/Remove Trials and Trial Comments
+Add/Remove Trials
 ======================================================
 
 Row {.tabset .tabset-fade}
@@ -226,185 +234,181 @@ There are two ways to add trials:
 -   NIHR - "14-158-02" or "14/158/02" or "RP-PG-0109-10056"
 -   Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
 
-```{r AddSingleTrial}
-
-shiny::fluidPage(
-
+```{r AddTrialsSideBySide}
+# One row with two columns. Uses Bootstrap 5 utilities (works with your theme).
 shiny::fluidRow(
-  shiny::column(12, shiny::h3("Add Single Trial")),
+  class = "g-3",  # nice gutter spacing
 
-  # Left Column
-  shiny::column(6,
-    shiny::radioButtons(
-      "registry_add",
-      label = "Select Registry",
-      choices = c(
-        "Clinicaltrials.gov" = "NCT_Ids",
-        "ISRCTN" = "ISRCTN_Ids",
-        "NIHR" = "NIHR_Ids",
-        "Clinicaltrials.eu" = "EU_Ids"
+  # =========================
+  # LEFT: Add Single Trial
+  # =========================
+  shiny::column(
+    width = 6,
+    shiny::div(
+      class = "d-flex",
+      shiny::div(
+        class = "card flex-fill mb-0",
+        shiny::div(class = "card-header h5 mb-0", "Add Single Trial"),
+        shiny::div(
+          class = "card-body",
+          shiny::radioButtons(
+            "registry_add",
+            label = "Select Registry",
+            choices = c(
+              "Clinicaltrials.gov" = "NCT_Ids",
+              "ISRCTN"             = "ISRCTN_Ids",
+              "NIHR"               = "NIHR_Ids",
+              "Clinicaltrials.eu"  = "EU_Ids"
+            )
+          ),
+          shiny::selectInput(
+            "guideline_program_add",
+            label   = "Enter program description",
+            choices = c("COVID", "IP", "Other"),
+            selected = "COVID"
+          ),
+          shiny::textInput(
+            "guideline_reference_add",
+            label = "Enter guideline number(s)",
+            placeholder = "e.g. CG179"
+          ),
+          shiny::textInput(
+            "ID_add",
+            label = "Enter Trial ID reference number",
+            placeholder = "e.g. NCT03597750"
+          ),
+          shiny::textInput(
+            "URL_add",
+            label = "Paste URL to trial page in registry",
+            placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750"
+          ),
+          shiny::actionButton("button_add",
+                              label = "Add single trial",
+                              icon  = shiny::icon("plus-circle"),
+                              class = "btn btn-primary"),
+          shiny::div(class = "mt-2", shiny::uiOutput("single_result"))
+        )
       )
-    ),
-    shiny::selectInput(
-      "guideline_program_add",
-      label = "Enter program description",
-      choices = c("COVID", "IP", "Other"),
-      selected = "COVID"
     )
   ),
 
-  # Right Column
-  shiny::column(6,
-    shiny::textInput(
-      "guideline_reference_add",
-      label = "Enter guideline number(s)",
-      placeholder = "e.g. CG179"
-    ),
-    shiny::textInput("ID_add", label = "Enter Trial ID reference number", placeholder = "e.g. NCT03597750"),
-    shiny::textInput("URL_add", label = "Paste URL to trial page in registry", placeholder = "e.g. https://clinicaltrials.gov/ct2/show/NCT03597750")
-  ),
-
-  # Full-width Add Button
-  shiny::column(12, shiny::actionButton("button_add", "Add trial"))
-),
-shiny::uiOutput("single_result")
-)
-```
-
-```{r AddMultiTrial}
-
-shiny::fluidRow(
-  shiny::column(12, shiny::h3("Add Multiple Trials via CSV File")),
-
-  shiny::column(6,
-    shiny::downloadButton("downloadtemplate", label = "Download template")
-  ),
-
-  shiny::column(6,
-    shiny::fileInput(
-      "uploadtemplate",
-      label = "Upload completed template",
-      multiple = FALSE,
-      accept = ".csv"
+  # =========================
+  # RIGHT: Add Multiple Trials
+  # =========================
+  shiny::column(
+    width = 6,
+    shiny::div(
+      class = "d-flex",
+      shiny::div(
+        class = "card flex-fill mb-0",
+        shiny::div(class = "card-header h5 mb-0", "Add Multiple Trials via CSV File"),
+        shiny::div(
+          class = "card-body",
+          # compact, non-stretching download button
+          shiny::tags$div(
+            class = "d-inline-block mb-2",
+            shiny::downloadButton(
+              "downloadtemplate",
+              label = "Download template",
+              class = "btn btn-secondary btn-sm"
+            )
+          ),
+          shiny::fileInput(
+            "uploadtemplate",
+            label = "Upload completed template",
+            multiple = FALSE,
+            accept = ".csv"
+          ),
+          shiny::actionButton("button_add_multi",
+                              label = "Add trial spreadsheet",
+                              icon  = shiny::icon("file-upload"),
+                              class = "btn btn-primary"),
+          shiny::div(
+            class = "mt-3",
+            shiny::uiOutput("multi_result"),
+            shiny::textOutput("multi_error"),
+            shiny::textOutput("multi_fail"),
+            shiny::textOutput("multi_success")
+          )
+        )
+      )
     )
-  ),
-
-  shiny::column(12,
-    shiny::actionButton("button_add_multi", label = "Add trial spreadsheet")
-  ),
-
-  shiny::column(12,
-    shiny::uiOutput("multi_result"),
-    shiny::textOutput("multi_error"),
-    shiny::textOutput("multi_fail"),
-    shiny::textOutput("multi_success")
   )
 )
-
 ```
 
 ### Remove or Archive Trial
 
-Select relevant registry and trial ID reference number below, along with any comments if archiving.
+Select relevant registry and trial ID reference number below, along with any archiving comments.
 
 'Archiving' moves the trial information from the live lists to the relevant archived trials list, where it will no longer be updated. 'Deleting' will remove the trial from the live lists and information will not be stored
 
 ```{r Removetab}
-
-shiny::fluidRow(
-  shiny::column(12, shiny::h3("Remove or Archive Trial")),
-
-  # Registry selection
-  shiny::column(6,
-    shiny::radioButtons(
-      "registry_remove",
-      label = "Registry",
-      choices = c(
-        "Clinicaltrials.gov" = "NCT_Ids",
-        "ISRCTN" = "ISRCTN_Ids",
-        "NIHR" = "NIHR_Ids",
-        "Clinicaltrials.eu" = "EU_Ids"
+shiny::fluidRow(class = "g-3", shiny::column(width = 12, shiny::div(
+  class = "card",
+  shiny::div(class = "card-header h5 mb-0", "Remove or Archive Trial"),
+  shiny::div(
+    class = "card-body",
+    
+    # Inputs
+    shiny::fluidRow(
+      shiny::column(
+        width = 4,
+        shiny::radioButtons(
+          "registry_remove",
+          label = "Registry",
+          choices = c(
+            "Clinicaltrials.gov" = "NCT_Ids",
+            "ISRCTN"             = "ISRCTN_Ids",
+            "NIHR"               = "NIHR_Ids",
+            "Clinicaltrials.eu"  = "EU_Ids"
+          )
+        )
+      ),
+      shiny::column(
+        width = 8,
+        shiny::selectInput("ID_remove", label = "Select Trial ID reference number", choices = ""),
+        shiny::textAreaInput(
+          "comments_archive",
+          label = "Archive Comments",
+          placeholder = "Optional notes for the archive record…",
+          rows = 2,
+          resize = "vertical"
+        )
+      )
+    ),
+    
+    # Actions (compact, consistent sizing)
+    shiny::div(
+      class = "d-flex gap-2 mt-2 flex-wrap",
+      shiny::actionButton(
+        "button_delete",
+        "Delete trial",
+        icon  = shiny::icon("trash"),
+        class = "btn btn-danger btn-sm"
+      ),
+      shiny::actionButton(
+        "button_archive",
+        "Archive trial",
+        icon  = shiny::icon("archive"),
+        class = "btn btn-warning btn-sm"
+      ),
+      shiny::downloadButton(
+        "button_download_dbs",
+        label = "Download SQLite data",
+        class = "btn btn-secondary btn-sm"
       )
     )
-  ),
-
-  # Trial ID selection
-  shiny::column(6,
-    shiny::selectInput("ID_remove", label = "Select Trial ID reference number", choices = "")
-    # shiny::textOutput("choices_list")  # Optional debug output
-  ),
-
-  # Action buttons
-  shiny::column(6,
-    shiny::actionButton("button_delete", "Delete trial")
-  ),
-
-  shiny::column(6,
-    shiny::textInput("comments_archive", "Archive Comments"),
-    shiny::actionButton("button_archive", "Archive trial")
-  ),
-
-  # Download button
-  shiny::column(12,
-    shiny::downloadButton("button_download_dbs", label = "Download SQLite data")
-  ),
-
-  # Output messages
-  shiny::column(12,
-    shiny::textOutput("success_delete"),
-    shiny::textOutput("success_archive")
-  )
-)
-```
-
-### Trial Comments
-
-Select trial and amend comments in the box below
-
-```{r TrialComments}
-
-shiny::fluidRow(
-  shiny::column(12, shiny::h3("Add or Amend Trial Comments")),
-
-  # Registry selection
-  shiny::column(6,
-    shiny::radioButtons(
-      "registry_comment",
-      label = "Registry",
-      choices = c(
-        "Clinicaltrials.gov" = "NCT_Ids",
-        "ISRCTN" = "ISRCTN_Ids",
-        "NIHR" = "NIHR_Ids",
-        "Clinicaltrials.eu" = "EU_Ids"
-      )
+    ,
+    
+    # Messages
+    shiny::div(
+      class = "mt-2",
+      shiny::textOutput("success_delete"),
+      shiny::textOutput("success_archive")
     )
-  ),
-
-  # Trial ID selection
-  shiny::column(6,
-    shiny::selectInput("ID_comment", label = "Select Trial ID reference number", choices = "")
-  ),
-
-  # Comments input
-  shiny::column(12,
-    shiny::textAreaInput(
-      "trial_comments",
-      label = "Comments",
-      placeholder = "Trial Comments",
-      resize = "both"
-    )
-  ),
-
-  # Action button
-  shiny::column(12,
-    shiny::actionButton("button_comment", "Amend Comments")
-  ),
-
-  # Output message
-  shiny::column(12,
-    shiny::textOutput("success_comment")
   )
-)
+)))
 ```
 
 Archived Trials
@@ -647,7 +651,7 @@ output$live_trial_table_isrctn <- DT::renderDT({
     ),
     reorder_cols = c("Program", "Guideline", "Date Added", "URL", "ISRCTN ID", "Title", "Acronym",
                      "Scientific Title", "Recruitment Status", "Results URL", "Results summary",
-                     "Results_date_completed", "Results_date_posted", "Results_date_first_publication", "Comments"),
+                     "Results_date_completed", "Results_date_posted", "Results_date_first_publication"),
     extra_mutate = ~ dplyr::mutate(.,
       `Results_date_completed` = lubridate::dmy(Results_date_completed),
       `Results_date_posted` = lubridate::dmy(Results_date_posted),
@@ -670,7 +674,7 @@ output$live_trial_table_nihr <- DT::renderDT({
       Status = "project_status",
       `End Date` = "end_date"
     ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "NIHR ID", "Project Title", "Status", "End Date", "Comments"),
+    reorder_cols = c("Program", "Guideline", "Date Added", "NIHR ID", "Project Title", "Status", "End Date"),
     extra_filter = ~ dplyr::mutate(., project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
                    dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
                    dplyr::select(-project_id_filter)
@@ -693,7 +697,7 @@ output$live_trial_table_eu <- DT::renderDT({
       `Sponsor ID` = "a41_sponsors_protocol_code_number"
     ),
     reorder_cols = c("Program", "Guideline", "Date Added", "Clinicaltrials.eu ID", "Title",
-                     "Abbreviated Title", "End of Trial Status", "Sponsor ID", "Comments"),
+                     "Abbreviated Title", "End of Trial Status", "Sponsor ID"),
     extra_filter = ~ dplyr::mutate(., short_id = stringr::str_sub(X_id, 1L, 14L)) |>
                    dplyr::filter(short_id %in% trial_id_df$EU_Ids) |>
                    dplyr::select(-short_id, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids)
@@ -730,10 +734,10 @@ output$nct_monthly_change <- DT::renderDT({
     dfs$new,
     dfs$old,
     group_col = c("Guideline.number", "NCTId"),
-    exclude = c("Query_Date", "Comments", "Condition", "BriefTitle", "Acronym", "PrimaryCompletionDate", "ResultsFirstSubmitDate", "SeeAlsoLinkURL"),
+    exclude = c("Query_Date", "Condition", "BriefTitle", "Acronym", "PrimaryCompletionDate", "ResultsFirstSubmitDate", "SeeAlsoLinkURL"),
     stop_on_error = FALSE
   )$comparison_df |>
-    dplyr::left_join(dfs$new |> dplyr::select(BriefTitle, Program, Guideline.number, URL, NCTId, Condition, ResultsFirstSubmitDate, Acronym, Comments),
+    dplyr::left_join(dfs$new |> dplyr::select(BriefTitle, Program, Guideline.number, URL, NCTId, Condition, ResultsFirstSubmitDate, Acronym),
                      by = c("Program", "Guideline.number", "URL", "NCTId")) |>
     dplyr::mutate(
       URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
@@ -746,7 +750,7 @@ output$nct_monthly_change <- DT::renderDT({
     dplyr::select(Change = chng_type, Program, Guideline = Guideline.number, URL = URL2, Acronym, Title, Condition,
                   Status = OverallStatus, `Completion Date` = CompletionDate,
                   `Results Submit Date` = ResultsFirstSubmitDate,
-                  `Last Update Date` = LastUpdatePostDate, Comments) |>
+                  `Last Update Date` = LastUpdatePostDate) |>
     dplyr::distinct()
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 output$isrctn_monthly_change <- DT::renderDT({
@@ -759,7 +763,7 @@ output$isrctn_monthly_change <- DT::renderDT({
     dfs$new,
     dfs$old,
     group_col = c("Guideline.number", "ISRCTN_No"),
-    exclude = c("Query_Date", "Comments"),
+    exclude = c("Query_Date"),
     stop_on_error = FALSE
   )$comparison_df |>
     dplyr::left_join(dfs$new) |>
@@ -794,7 +798,7 @@ output$nihr_monthly_change <- DT::renderDT({
     dfs$new,
     dfs$old,
     group_col = c("Guideline.number", "project_id"),
-    exclude = c("Query_Date", "Comments"),
+    exclude = c("Query_Date"),
     stop_on_error = FALSE
   )$comparison_df |>
     dplyr::left_join(dfs$new) |>
@@ -824,7 +828,7 @@ output$clinicaltrialseu_monthly_change <- DT::renderDT({
     dfs$new,
     dfs$old,
     group_col = c("Guideline.number", "EU_Ids"),
-    exclude = c("Query_Date", "Comments"),
+    exclude = c("Query_Date"),
     stop_on_error = FALSE
   )$comparison_df |>
     dplyr::left_join(dfs$new) |>
@@ -1269,85 +1273,6 @@ shiny::observeEvent(input$button_archive, {
   # return some success message
   output$success_archive <- shiny::renderText("Trial Successfully Archived. It should disappear from live lists and appear in archive on browser refresh")
 })
-
-### TRIAL COMMENTS
-
-# Update comment choice list
-shiny::observeEvent(input$registry_comment, {
-  choices_list <- DBI::dbReadTable(main_con, "Trial_Ids") |>
-    dplyr::select(ids = input$registry_comment) |>
-    tidyr::drop_na() |>
-    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-")) |> 
-    dplyr::pull(ids)
-
-  shiny::updateSelectInput(session, "ID_comment", choices = choices_list)
-})
-
-# SQL template for pulling comments
-sql_comments_pull <- "SELECT Comments FROM ?Orig_Table WHERE [?ColID] = ?comment_id AND Query_Date IN (SELECT max(Query_Date) FROM ?Orig_Table)"
-
-# Reactive to generate SQL code based on template
-exp_comment_pull <- shiny::reactive({
-  DBI::sqlInterpolate(
-    main_con,
-    sql_comments_pull,
-    Orig_Table = DBI::SQL(stringr::str_sub(input$registry_comment, end = -5L)),
-    ColID = DBI::SQL(dplyr::case_when(
-      input$registry_comment == "NCT_Ids" ~ "NCTId",
-      input$registry_comment == "NIHR_Ids" ~ "project_id",
-      input$registry_comment == "ISRCTN_Ids" ~ "ISRCTN_No",
-      input$registry_comment == "EU_Ids" ~ "EU_Ids"
-    )),
-    comment_id = input$ID_comment
-  )
-})
-
-pulled_comments <- shiny::reactive({
-  DBI::dbGetQuery(main_con, exp_comment_pull()) |> as.character()
-})
-
-# Rendering of queries (for debugging if inserted into UI)
-output$comment_sql <- shiny::renderText(exp_comment_pull())
-output$fetch_comment_SQL <- shiny::renderText(pulled_comments())
-
-# Comment logic
-shiny::observeEvent(input$ID_comment, {
-  updateTextAreaInput(session, "trial_comments", value = pulled_comments())
-})
-
-shiny::observeEvent(input$button_comment, {
-  # Add spinner
-  shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Amending Comments - please wait while the dashboard refreshes in background....")
-
-  # Take contents of button
-  comment_text <- input$trial_comments
-
-  # Derive SQL to insert into table
-  comment_insert_sql <- "UPDATE ?TabID SET Comments = ?comment_text WHERE ?ID_name == ?id_no"
-
-  update_comment_sql <-
-    DBI::sqlInterpolate(main_con,
-      comment_insert_sql,
-      TabID = DBI::SQL(stringr::str_sub(input$registry_comment, end = -5L)),
-      comment_text = comment_text,
-      ID_name = DBI::SQL(dplyr::case_when(
-        input$registry_comment == "NCT_Ids" ~ "NCTId",
-        input$registry_comment == "NIHR_Ids" ~ "project_id",
-        input$registry_comment == "ISRCTN_Ids" ~ "ISRCTN_No",
-        input$registry_comment == "EU_Ids" ~ "EU_Ids"
-      )),
-      id_no = input$ID_comment
-    )
-
-  # Action SQL
-  DBI::dbExecute(main_con, update_comment_sql)
-
-  # Remove spinner
-  shinybusy::remove_modal_spinner()
-
-  # return some success message
-  output$success_comment <- shiny::renderText("Comments Successfully Updated - please refresh dashboard to see updated comments")
-  })
 
 # Server code for 'download SQLite databases' button
   
