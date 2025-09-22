@@ -1223,6 +1223,7 @@ shiny::observeEvent(input$registry_remove, {
   
   shiny::updateSelectInput(session, "ID_remove", choices = choices_list)
   
+  #Commented out (for debugging)
   #output$choices_list <- shiny::renderText(choices_list)
   
 })
