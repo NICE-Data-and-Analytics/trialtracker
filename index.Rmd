@@ -1,26 +1,41 @@
 ---
-title: "TrialTracker Dashboard"
-format: 
-  dashboard:
-    includes:
-      in-header: Secrets/GA_Script.html
-    css: styles.css
-    output-file: "index.html"
-server: shiny
-brand: _brand.yml
+title: "Trial Tracker Dashboard"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    theme:
+      version: 5
+      bootswatch: flatly
+      "enable-dark-mode": false
+runtime: shiny
 ---
 
-```{r setup, context = "server"}
-#| echo: false
-#| include: false
+```{r setup, context = "server", echo=FALSE, include=FALSE}
 
-main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite"))
+db_path <- file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
+main_con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
 
+# Store the db's modified time (POSIXct)
+last_refreshed <- reactiveVal({
+  if (file.exists(db_path)) file.info(db_path)$mtime
+  else as.POSIXct(NA_real_, origin = "1970-01-01", tz = "UTC")
+})
+
+# Poll the DB file periodically and refresh the reactive timestamp
+observe({
+  invalidateLater(60 * 1000, session)  # every 60s; tie timer to the session
+  if (file.exists(db_path)) {
+    new_ts <- file.info(db_path)$mtime
+    # Only update if it actually changed (avoids unnecessary reactivity)
+    if (!identical(new_ts, last_refreshed())) last_refreshed(new_ts)
+  }
+})
+
 # Regex patterns
-NCT_pattern <- "NCT[0-9]{8}"
-EU_pattern <- "[0-9]{4}-[0-9]{6}-[0-9]{2}"
-ISRCTN_pattern <- "ISRCTN[0-9]{8}"
+NCT_pattern <- "^NCT[0-9]{8}$"
+EU_pattern <- "^[0-9]{4}-[0-9]{6}-[0-9]{2}$"
+ISRCTN_pattern <- "^ISRCTN[0-9]{8}$"
 NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})"
 
 # Helper functions (non-reactive and used for rendering UI)
@@ -30,7 +45,7 @@ clean_utf8 <- function(x){
   iconv(x, "UTF-8", "UTF-8", sub = "")
 }
 
-# Render pubmed
+# Render pubmed function
 render_pubmed_table <- function(table_name) {
   if (!table_name %in% DBI::dbListTables(main_con)) return(NULL)
 
@@ -59,57 +74,49 @@ render_pubmed_table <- function(table_name) {
     DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 }
 
-
 ```
 
+Live Trial Info
+======================================================
 
-# Live Trial Info
+**`r textOutput("last_refreshed_txt_live", inline = TRUE)`**
 
-```{r}
-shiny::textOutput("timestamp_text_live")
-```
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
 
-<div style="height: 80vh;">
-::: {.panel-tabset}
-
-## ClinicalTrials.gov
+### ClinicalTrials.gov
 
 ```{r CTGlive}
 DT::dataTableOutput("live_trial_table_nct")
 ```
 
-## ISRCTN
+### ISRCTN
 
 ```{r ISCTNlive}
 DT::dataTableOutput("live_trial_table_isrctn")
 ```
 
-## NIHR
+### NIHR
 
 ```{r NIHRlive}
 DT::dataTableOutput("live_trial_table_nihr")
 ```
 
-## Clinicaltrials.eu
+### Clinicaltrials.eu
 
 ```{r EUlive}
 DT::dataTableOutput("live_trial_table_eu")
 ```
 
-:::
-</div>
+Recent Status Changes
+======================================================
 
-# Recent Status Changes
+**`r textOutput("last_refreshed_txt_recent", inline = TRUE)`**
 
 **Changes are from 31 days ago**
 
-```{r}
-shiny::textOutput("timestamp_text_recents")
-```
-
-
-<div style="height: 80vh;">
-::: {.panel-tabset}
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
 
 ### ClinicalTrials.gov
 
@@ -135,17 +142,13 @@ DT::dataTableOutput("nihr_monthly_change")
 DT::dataTableOutput("clinicaltrialseu_monthly_change")
 ```
 
-:::
-</div>
+No Changes in Last 6m
+======================================================
 
-# No Changes in Last 6m
+**`r textOutput("last_refreshed_txt_nochg", inline = TRUE)`**
 
-```{r}
-shiny::textOutput("timestamp_text_no_changes")
-```
-
-<div style="height: 80vh;">
-::: {.panel-tabset}
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
 
 ### ClinicalTrials.gov
 
@@ -170,13 +173,14 @@ DT::dataTableOutput("no_change_nihr")
 ```{r nochangeEU}
 DT::dataTableOutput("no_change_cteu")
 ```
-:::
-</div>
 
-# Pubmed Publications
+Pubmed Publications
+======================================================
 
-<div style="height: 80vh;">
-::: {.panel-tabset}
+**`r textOutput("last_refreshed_txt_pub", inline = TRUE)`**
+
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
 
 ### ClinicalTrials.gov
 
@@ -202,12 +206,11 @@ render_pubmed_table("NIHR_PM")
 render_pubmed_table("EU_PM")
 ```
 
-:::
-</div>
+Add/Remove Trials and Trial Comments
+======================================================
 
-# Add/Remove Trials and Trial Comments
-
-::: {.panel-tabset}
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
 
 ### Add Trial
 
@@ -224,8 +227,6 @@ There are two ways to add trials:
 -   Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
 
 ```{r AddSingleTrial}
-
-## Columns aren't working (tabset?) but it is more spaced out which is better
 
 shiny::fluidPage(
 
@@ -270,8 +271,6 @@ shiny::uiOutput("single_result")
 )
 ```
 
-### Add Multiple Trials
-
 ```{r AddMultiTrial}
 
 shiny::fluidRow(
@@ -301,7 +300,6 @@ shiny::fluidRow(
     shiny::textOutput("multi_success")
   )
 )
-
 
 ```
 
@@ -357,7 +355,6 @@ shiny::fluidRow(
     shiny::textOutput("success_archive")
   )
 )
-
 ```
 
 ### Trial Comments
@@ -408,16 +405,13 @@ shiny::fluidRow(
     shiny::textOutput("success_comment")
   )
 )
-
 ```
 
-:::
+Archived Trials
+======================================================
 
-# Archived Trials
-
-<div style="height: 80vh;">
-
-::: {.panel-tabset}
+Row {.tabset .tabset-fade}
+--------------------------------------------------------
 
 ### ClinicalTrials.gov Archive
 
@@ -529,11 +523,7 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
   DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
-:::
-
-</div>
-
-```{r ServerCodeUpdates, context = "server"}
+```{r ServerCodeUpdates , context = "server"}
 
 # Inititalise reactive vals for live trial info tables
 nct_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NCT"))
@@ -541,29 +531,26 @@ isrctn_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "ISRCTN"))
 eu_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "EU"))
 nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
 
-# Initialise timestamp 
-last_refreshed <- shiny::reactiveVal(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
+# Helper to render a "last refreshed" string into a given output ID
+render_last_refreshed <- function(id) {
+  output[[id]] <- shiny::renderText({
+    ts <- last_refreshed()
+    if (is.null(ts) || is.na(ts)) return("Unknown")
 
-# Create output for 'last_updated' timestamp
-output$timestamp_text_live <- shiny::renderText({
-  paste(
-    "🔄 Last refreshed at:",
-    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
-  )
-})
-output$timestamp_text_recents <- shiny::renderText({
-  paste(
-    "🔄 Last refreshed at:",
-    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
-  )
-})
-output$timestamp_text_no_changes <- shiny::renderText({
-  paste(
-    "🔄 Last refreshed at:",
-    format(lubridate::with_tz(last_refreshed(), "UTC"), "%Y-%m-%d %H:%M:%S UTC")
-  )
-})
+    # Display in UK local time (BST/GMT) and UTC
+    utc <- format(ts, "%Y-%m-%d %H:%M",       tz = "UTC")
 
+    paste0("🔄 Last refreshed at: ",
+           utc,
+           " UTC)")
+  })
+}
+
+# Create multiple refresh outputs for each page
+render_last_refreshed("last_refreshed_txt_live")
+render_last_refreshed("last_refreshed_txt_recent")
+render_last_refreshed("last_refreshed_txt_nochg")
+render_last_refreshed("last_refreshed_txt_pub")
 
 # Central refresh function
 refresh_all_data <- function() {
@@ -577,14 +564,13 @@ refresh_all_data <- function() {
   eu_data(DBI::dbReadTable(main_con, "EU"))
   nihr_data(DBI::dbReadTable(main_con, "NIHR"))
 
-  last_refreshed(file.info("inst/extdata/RSQLite_data/TrialTracker-db.sqlite")$mtime)
+  last_refreshed(file.info(db_path)$mtime)
 }
-
 
 
 ```
 
-```{r ServerLiveTrialInfo, context = "server"}
+```{r ServerLiveTrialInfo , context = "server"}
 
 # Shared helper for rendering livetrialinfos
 render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols = NULL, extra_mutate = NULL, extra_filter = NULL) {
@@ -713,10 +699,9 @@ output$live_trial_table_eu <- DT::renderDT({
                    dplyr::select(-short_id, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids)
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-
 ```
 
-```{r ServerRecentStatusChanges, context = "server"}
+```{r ServerRecentStatusChanges , context = "server"}
 
 # Variable for cutoff date (31 days)
 cutoff_date <- Sys.Date() - 31L
@@ -859,42 +844,80 @@ output$clinicaltrialseu_monthly_change <- DT::renderDT({
     ) |>
     dplyr::distinct()
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-
 ```
 
-```{r ServerNoChangesInLast6M, context = "server"}
+```{r ServerNoChangesInLast6M , context = "server"}
 
 # Shared helper for no-change tables
-generate_nochange_table <- function(data, id_col, rename_list, drop_cols = NULL, reorder_cols = NULL, date_cols = NULL, extra_mutate = NULL) {
+generate_nochange_table <- function(
+  data,
+  id_col,
+  rename_list,
+  drop_cols    = NULL,
+  reorder_cols = NULL,
+  date_cols    = NULL,
+  extra_mutate = NULL
+) {
   req(data)
 
+  # Be sure Query_Date is Date
+  data <- dplyr::mutate(data, Query_Date = lubridate::as_date(Query_Date))
+
+  # Latest date with data
   max_date <- max(data$Query_Date, na.rm = TRUE)
-  old_date <- max_date - months(6L)
 
+  # Latest date that is at least 6 months older than max_date AND exists in data
+  cutoff <- lubridate::add_with_rollback(max_date, -lubridate::period(months = 6L))
+  older_ok <- data$Query_Date <= cutoff
+
+  if (any(older_ok, na.rm = TRUE)) {
+    old_date <- max(data$Query_Date[older_ok], na.rm = TRUE)
+  } else {
+    old_date <- as.Date(NA)
+  }
+
+  # Snapshots
   current <- dplyr::filter(data, Query_Date == max_date)
-  old <- dplyr::filter(data, Query_Date == old_date)
+  old     <- if (is.na(old_date)) dplyr::slice(current, 0) else dplyr::filter(data, Query_Date == old_date)
 
+  # Date Added (unchanged)
   date_added <- data |>
     dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = {{ id_col }})
 
-  joined <- dplyr::inner_join(current, old, by = names(current)[2:(ncol(current) - 1)], keep = FALSE) |>
-    dplyr::select(-contains(".x"), -contains(".y")) |>
-    dplyr::left_join(date_added, by = rlang::as_string(rlang::ensym(id_col))) |>
-    dplyr::mutate(across(.cols = everything(), .fns = clean_utf8))
+  # Join on all shared columns EXCEPT Query_Date to identify rows that are unchanged
+  by_cols <- setdiff(intersect(names(current), names(old)), "Query_Date")
 
-  if (!is.null(date_cols)) {
+  joined <- dplyr::inner_join(
+      current, old,
+      by = by_cols,
+      suffix = c(".cur", ".old")
+    ) |>
+    # Drop duplicated columns created by the join; keep a single copy
+    dplyr::select(-dplyr::ends_with(".cur"), -dplyr::ends_with(".old")) |>
+    # Attach 'Date Added'
+    dplyr::left_join(date_added, by = rlang::as_string(rlang::ensym(id_col))) |>
+    dplyr::mutate(across(.cols = dplyr::everything(), .fns = clean_utf8))
+
+  # Parse any date columns for display
+  if (!is.null(date_cols) && nrow(joined) > 0) {
     joined <- joined |>
-      dplyr::mutate(across(all_of(date_cols), ~ lubridate::as_date(lubridate::parse_date_time(.x, c("ymd", "bdy", "dmy"), truncated = 1))))
+      dplyr::mutate(across(
+        dplyr::all_of(date_cols),
+        ~ lubridate::as_date(lubridate::parse_date_time(.x, c("ymd", "bdy", "dmy"), truncated = 1))
+      ))
   }
 
+  # Optional extra mutate
   if (is.function(extra_mutate)) {
     joined <- extra_mutate(joined)
   }
 
+  # Drop unwanted cols
   if (!is.null(drop_cols)) {
     joined <- dplyr::select(joined, -dplyr::any_of(drop_cols))
   }
 
+  # Rename & reorder
   joined <- joined |>
     dplyr::rename(!!!rename_list)
 
@@ -902,10 +925,9 @@ generate_nochange_table <- function(data, id_col, rename_list, drop_cols = NULL,
     joined <- dplyr::select(joined, dplyr::all_of(reorder_cols))
   }
 
-  joined |>
-    dplyr::distinct()
+  dplyr::distinct(joined)
 }
-
+  
 # Tables
 output$no_change_nct <- DT::renderDT({
   generate_nochange_table(
@@ -985,10 +1007,9 @@ output$no_change_cteu <- DT::renderDT({
                      "Abbreviated Title", "End of Trial Status", "Sponsor ID")
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-
 ```
 
-```{r ServerUserInteractions, context = "server"}
+```{r ServerUserInteractions , context = "server"}
 
 #### Functionality to add / remove / archive /comment
 
@@ -1013,7 +1034,11 @@ exp_add <- shiny::reactive({
 
 # Single trial add logic
 shiny::observeEvent(input$button_add, {
-  valid_id_check <- stringr::str_detect(input$ID_add, paste(c(NCT_pattern, EU_pattern, ISRCTN_pattern, NIHR_pattern), collapse = "|"))
+  valid_id_check <-
+    stringr::str_detect(
+      stringr::str_trim(input$ID_add),
+      stringr::str_c(NCT_pattern, EU_pattern, ISRCTN_pattern, NIHR_pattern, sep = "|")
+    )
 
   if (valid_id_check) {
     shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trial - please wait while the dashboard refreshes in background....")
@@ -1060,20 +1085,20 @@ output$downloadtemplate <- shiny::downloadHandler(
 
 # Reactive for multiple uploads
 to_add <- shiny::reactive({
-  inFile <- input$uploadtemplate
-  upload <- readr::read_csv(file = inFile$datapath, col_types = readr::cols(.default = readr::col_character()))
+  req(input$uploadtemplate)
+  readr::read_csv(input$uploadtemplate$datapath,
+                  col_types = readr::cols(.default = readr::col_character()))
 })
 
 # Multiple upload logic
 shiny::observeEvent(input$uploadtemplate, {
-  NCT_check <- stringr::str_detect(tidyr::replace_na(to_add()$NCT_Ids, ""), NCT_pattern)
-  EU_check <- stringr::str_detect(tidyr::replace_na(to_add()$EU_Ids, ""), EU_pattern)
-  ISRCTN_check <- stringr::str_detect(tidyr::replace_na(to_add()$ISRCTN_Ids, ""), ISRCTN_pattern)
-  NIHR_check <- stringr::str_detect(tidyr::replace_na(to_add()$NIHR_Ids, ""), NIHR_pattern)
-  Valid_ID <- {
-    NCT_check | EU_check | ISRCTN_check | NIHR_check
-  }
-  
+  df <- to_add()
+  NCT_check    <- stringr::str_detect(tidyr::replace_na(df$NCT_Ids, ""), NCT_pattern)
+  EU_check     <- stringr::str_detect(tidyr::replace_na(df$EU_Ids, ""), EU_pattern)
+  ISRCTN_check <- stringr::str_detect(tidyr::replace_na(df$ISRCTN_Ids, ""), ISRCTN_pattern)
+  NIHR_check   <- stringr::str_detect(tidyr::replace_na(df$NIHR_Ids, ""), NIHR_pattern)
+  Valid_ID     <- NCT_check | EU_check | ISRCTN_check | NIHR_check
+
   errors <- which(!Valid_ID)
 
   ## Commented out as only used for debugging
@@ -1328,19 +1353,16 @@ shiny::observeEvent(input$button_comment, {
   
 # Function to allow downloading of files
 output$button_download_dbs <- shiny::downloadHandler(
-  filename = function() {
-    paste0("databases-", Sys.Date(), ".zip")
-  },
-  content = function(file) {
-    # Create the zip file
+  
+filename = function() paste0("databases-", Sys.Date(), ".zip"),
+  content  = function(file) {
     zip::zipr(
-      file,
-      files = c("Trialtracker-db.sqlite", "EU_temp_db.sqlite"),
-      root = "inst\\extdata\\RSQLite_data\\",
+      zipfile = file,
+      files   = c("TrialTracker-db.sqlite", "EU_temp_db.sqlite"),
+      root    = file.path("inst", "extdata", "RSQLite_data"),
       recurse = FALSE,
       include_directories = FALSE
     )
   }
 )
-
 ```

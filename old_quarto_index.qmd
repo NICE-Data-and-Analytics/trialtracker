@@ -1,14 +1,17 @@
 ---
 title: "TrialTracker Dashboard"
-runtime: shiny_prerendered
-output:
-  html_document:
+format: 
+  dashboard:
     includes:
-      in_header: Secrets/GA_Script.html
+      in-header: Secrets/GA_Script.html
     css: styles.css
+    output-file: "index.html"
+server: shiny
 ---
 
-```{r setup , context = "server", echo=FALSE, include=FALSE}
+```{r setup, context = "server"}
+#| echo: false
+#| include: false
 
 main_con <- DBI::dbConnect(RSQLite::SQLite(), file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite"))
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
@@ -55,6 +58,7 @@ render_pubmed_table <- function(table_name) {
     DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 }
 
+
 ```
 
 
@@ -65,7 +69,7 @@ shiny::textOutput("timestamp_text_live")
 ```
 
 <div style="height: 80vh;">
-::: {.tabset}
+::: {.panel-tabset}
 
 ## ClinicalTrials.gov
 
@@ -104,7 +108,7 @@ shiny::textOutput("timestamp_text_recents")
 
 
 <div style="height: 80vh;">
-::: {.tabset}
+::: {.panel-tabset}
 
 ### ClinicalTrials.gov
 
@@ -140,7 +144,7 @@ shiny::textOutput("timestamp_text_no_changes")
 ```
 
 <div style="height: 80vh;">
-::: {.tabset}
+::: {.panel-tabset}
 
 ### ClinicalTrials.gov
 
@@ -171,7 +175,7 @@ DT::dataTableOutput("no_change_cteu")
 # Pubmed Publications
 
 <div style="height: 80vh;">
-::: {.tabset}
+::: {.panel-tabset}
 
 ### ClinicalTrials.gov
 
@@ -202,7 +206,7 @@ render_pubmed_table("EU_PM")
 
 # Add/Remove Trials and Trial Comments
 
-::: {.tabset}
+::: {.panel-tabset}
 
 ### Add Trial
 
@@ -297,6 +301,7 @@ shiny::fluidRow(
   )
 )
 
+
 ```
 
 ### Remove or Archive Trial
@@ -351,6 +356,7 @@ shiny::fluidRow(
     shiny::textOutput("success_archive")
   )
 )
+
 ```
 
 ### Trial Comments
@@ -401,6 +407,7 @@ shiny::fluidRow(
     shiny::textOutput("success_comment")
   )
 )
+
 ```
 
 :::
@@ -409,7 +416,7 @@ shiny::fluidRow(
 
 <div style="height: 80vh;">
 
-::: {.tabset}
+::: {.panel-tabset}
 
 ### ClinicalTrials.gov Archive
 
@@ -525,7 +532,7 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 
 </div>
 
-```{r ServerCodeUpdates , context = "server"}
+```{r ServerCodeUpdates, context = "server"}
 
 # Inititalise reactive vals for live trial info tables
 nct_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NCT"))
@@ -573,9 +580,10 @@ refresh_all_data <- function() {
 }
 
 
+
 ```
 
-```{r ServerLiveTrialInfo , context = "server"}
+```{r ServerLiveTrialInfo, context = "server"}
 
 # Shared helper for rendering livetrialinfos
 render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols = NULL, extra_mutate = NULL, extra_filter = NULL) {
@@ -704,9 +712,10 @@ output$live_trial_table_eu <- DT::renderDT({
                    dplyr::select(-short_id, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids)
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
 
-```{r ServerRecentStatusChanges , context = "server"}
+```{r ServerRecentStatusChanges, context = "server"}
 
 # Variable for cutoff date (31 days)
 cutoff_date <- Sys.Date() - 31L
@@ -849,9 +858,10 @@ output$clinicaltrialseu_monthly_change <- DT::renderDT({
     ) |>
     dplyr::distinct()
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
 
-```{r ServerNoChangesInLast6M , context = "server"}
+```{r ServerNoChangesInLast6M, context = "server"}
 
 # Shared helper for no-change tables
 generate_nochange_table <- function(data, id_col, rename_list, drop_cols = NULL, reorder_cols = NULL, date_cols = NULL, extra_mutate = NULL) {
@@ -974,9 +984,10 @@ output$no_change_cteu <- DT::renderDT({
                      "Abbreviated Title", "End of Trial Status", "Sponsor ID")
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+
 ```
 
-```{r ServerUserInteractions , context = "server"}
+```{r ServerUserInteractions, context = "server"}
 
 #### Functionality to add / remove / archive /comment
 
@@ -1330,4 +1341,5 @@ output$button_download_dbs <- shiny::downloadHandler(
     )
   }
 )
+
 ```
