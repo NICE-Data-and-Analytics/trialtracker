@@ -643,10 +643,10 @@ refresh_all_data <- function() {
 
 ```{r ServerLiveTrialInfo, context = "server", echo = FALSE}
 
-# ClinicalTrials.gov — Latest
-output$live_trial_table_nct <- DT::renderDT({
+# --- NCT latest (reactive data) ---
+nct_latest_df <- shiny::reactive({
   base_sql <- latest_sql("NCT", "NCTId")
-  df <- .with_temp_ids(pool_con, "_tmp_nct_ids", "NCTId", nct_ids(), function(has_ids) {
+  .with_temp_ids(pool_con, "_tmp_nct_ids", "NCTId", nct_ids(), function(has_ids) {
     if (has_ids) {
       DBI::dbGetQuery(pool_con, glue::glue("
         WITH latest AS ({base_sql})
@@ -668,17 +668,21 @@ output$live_trial_table_nct <- DT::renderDT({
       "))
     }
   })
-  if (!base::nrow(df)) base::return(df)
-  df |>
-    dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
-}, options = dt_opts_server, server = TRUE, filter = "top") |>
+}) |>
   shiny::bindCache(mtime_reader(), nct_ids()) |>
   shiny::bindEvent(mtime_reader())
 
-# ISRCTN — Latest
-output$live_trial_table_isrctn <- DT::renderDT({
+output$live_trial_table_nct <- DT::renderDT({
+  df <- nct_latest_df()
+  if (!base::nrow(df)) return(df)
+  df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
+}, options = dt_opts_server, server = TRUE, filter = "top")
+
+
+# --- ISRCTN latest (reactive data) ---
+isr_latest_df <- shiny::reactive({
   base_sql <- latest_sql("ISRCTN", "ISRCTN")
-  df <- .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN", isr_ids(), function(has_ids) {
+  .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN", isr_ids(), function(has_ids) {
     if (has_ids) {
       DBI::dbGetQuery(pool_con, glue::glue("
         WITH latest AS ({base_sql})
@@ -708,26 +712,31 @@ output$live_trial_table_isrctn <- DT::renderDT({
       "))
     }
   })
-  if (!base::nrow(df)) base::return(df)
+}) |>
+  shiny::bindCache(mtime_reader(), isr_ids()) |>
+  shiny::bindEvent(mtime_reader())
+
+output$live_trial_table_isrctn <- DT::renderDT({
+  df <- isr_latest_df()
+  if (!base::nrow(df)) return(df)
   df |>
     dplyr::mutate(
       Title = fast_trunc(.data[["Title"]], 120L),
-      `Results_date_completed`       = lubridate::dmy(.data[["Results_date_completed"]]),
-      `Results_date_posted`          = lubridate::dmy(.data[["Results_date_posted"]]),
+      `Results_date_completed`        = lubridate::dmy(.data[["Results_date_completed"]]),
+      `Results_date_posted`           = lubridate::dmy(.data[["Results_date_posted"]]),
       `Results_date_first_publication`= lubridate::dmy(.data[["Results_date_first_publication"]])
     ) |>
     dplyr::select(
       .data[["Program"]], .data[["Guideline"]], .data[["Query Date"]], .data[["URL"]],
       .data[["ISRCTN"]], .data[["Title"]], dplyr::everything()
     )
-}, options = dt_opts_server, server = TRUE, filter = "top") |>
-  shiny::bindCache(mtime_reader(), isr_ids()) |>
-  shiny::bindEvent(mtime_reader())
+}, options = dt_opts_server, server = TRUE, filter = "top")
 
-# NIHR — Latest
-output$live_trial_table_nihr <- DT::renderDT({
+
+# --- NIHR latest (reactive data) ---
+nihr_latest_df <- shiny::reactive({
   base_sql <- latest_sql("NIHR", "project_id")
-  df <- .with_temp_ids(pool_con, "_tmp_nihr_ids", "project_id", nihr_ids(), function(has_ids) {
+  .with_temp_ids(pool_con, "_tmp_nihr_ids", "project_id", nihr_ids(), function(has_ids) {
     if (has_ids) {
       DBI::dbGetQuery(pool_con, glue::glue("
         WITH latest AS ({base_sql})
@@ -751,16 +760,19 @@ output$live_trial_table_nihr <- DT::renderDT({
       "))
     }
   })
-  if (!base::nrow(df)) base::return(df)
-  df
-}, options = dt_opts_server, server = TRUE, filter = "top") |>
+}) |>
   shiny::bindCache(mtime_reader(), nihr_ids()) |>
   shiny::bindEvent(mtime_reader())
 
-# Clinicaltrials.eu — Latest
-output$live_trial_table_eu <- DT::renderDT({
+output$live_trial_table_nihr <- DT::renderDT({
+  nihr_latest_df()
+}, options = dt_opts_server, server = TRUE, filter = "top")
+
+
+# --- EU latest (reactive data) ---
+eu_latest_df <- shiny::reactive({
   base_sql <- latest_sql("EU", "EU_Ids")
-  df <- .with_temp_ids(pool_con, "_tmp_eu_ids", "EU_Ids", eu_ids(), function(has_ids) {
+  .with_temp_ids(pool_con, "_tmp_eu_ids", "EU_Ids", eu_ids(), function(has_ids) {
     if (has_ids) {
       DBI::dbGetQuery(pool_con, glue::glue("
         WITH latest AS ({base_sql})
@@ -791,12 +803,15 @@ output$live_trial_table_eu <- DT::renderDT({
       "))
     }
   })
-  if (!base::nrow(df)) base::return(df)
-  df |>
-    dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
-}, options = dt_opts_server, server = TRUE, filter = "top") |>
+}) |>
   shiny::bindCache(mtime_reader(), eu_ids()) |>
   shiny::bindEvent(mtime_reader())
+
+output$live_trial_table_eu <- DT::renderDT({
+  df <- eu_latest_df()
+  if (!base::nrow(df)) return(df)
+  df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
+}, options = dt_opts_server, server = TRUE, filter = "top")
 
 ```
 
