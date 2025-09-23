@@ -127,7 +127,7 @@ last_two_cte_sql <- function(table, id_col) {              # why: compute last t
 }
 
 # PubMed: return a data.frame (NOT a DT widget); render with renderDT(server = FALSE)
-render_pubmed_df <- function(df) {
+render_pubmed_table <- function(df) {
   if (!base::nrow(df)) return(df)
   df |>
     dplyr::mutate(across(where(is.character), clean_utf8)) |>
@@ -177,25 +177,25 @@ Row {.tabset .tabset-fade}
 ### ClinicalTrials.gov
 
 ```{r CTGlive}
-DT::dataTableOutput("live_trial_table_nct")
+DT::DTOutput("live_trial_table_nct")
 ```
 
 ### ISRCTN
 
 ```{r ISCTNlive}
-DT::dataTableOutput("live_trial_table_isrctn")
+DT::DTOutput("live_trial_table_isrctn")
 ```
 
 ### NIHR
 
 ```{r NIHRlive}
-DT::dataTableOutput("live_trial_table_nihr")
+DT::DTOutput("live_trial_table_nihr")
 ```
 
 ### Clinicaltrials.eu
 
 ```{r EUlive}
-DT::dataTableOutput("live_trial_table_eu")
+DT::DTOutput("live_trial_table_eu")
 ```
 
 Recent Status Changes
@@ -211,25 +211,25 @@ Row {.tabset .tabset-fade}
 ### ClinicalTrials.gov
 
 ```{r NCTmonthlychange}
-DT::dataTableOutput("nct_monthly_change")
+DT::DTOutput("nct_monthly_change")
 ```
 
 ### ISRCTN
 
 ```{r ISRCTNmonthlychange}
-DT::dataTableOutput("isrctn_monthly_change")
+DT::DTOutput("isrctn_monthly_change")
 ```
 
 ### NIHR
 
 ```{r NIHRmonthlychange}
-DT::dataTableOutput("nihr_monthly_change")
+DT::DTOutput("nihr_monthly_change")
 ```
 
 ### Clinicaltrials.eu
 
 ```{r Clinicaltrialseumonthlychange}
-DT::dataTableOutput("clinicaltrialseu_monthly_change")
+DT::DTOutput("clinicaltrialseu_monthly_change")
 ```
 
 No Changes in Last 6m
@@ -243,25 +243,25 @@ Row {.tabset .tabset-fade}
 ### ClinicalTrials.gov
 
 ```{r nochangeCTG}
-DT::dataTableOutput("no_change_nct")
+DT::DTOutput("no_change_nct")
 ```
 
 ### ISRCTN
 
 ```{r nochangeISRCTN}
-DT::dataTableOutput("no_change_isrctn")
+DT::DTOutput("no_change_isrctn")
 ```
 
 ### NIHR
 
 ```{r nochangeNIHR}
-DT::dataTableOutput("no_change_nihr")
+DT::DTOutput("no_change_nihr")
 ```
 
 ### Clinicaltrials.eu
 
 ```{r nochangeEU}
-DT::dataTableOutput("no_change_cteu")
+DT::DTOutput("no_change_cteu")
 ```
 
 Pubmed Publications
@@ -275,25 +275,25 @@ Row {.tabset .tabset-fade}
 ### ClinicalTrials.gov
 
 ```{r CTGpubstable}
-render_pubmed_table("NCT_PM")
+DT::DTOutput("pubmed_nct")
 ```
 
 ### ISRCTN
 
 ```{r ISRCTNpubstable}
-render_pubmed_table("ISRCTN_PM")
+DT::DTOutput("pubmed_isrctn")
 ```
 
 ### NIHR
 
 ```{r NIHRpubstable}
-render_pubmed_table("NIHR_PM")
+DT::DTOutput("pubmed_nihr")
 ```
 
 ### Clinicaltrials.eu
 
 ```{r EUpubstable}
-render_pubmed_table("EU_PM")
+DT::DTOutput("pubmed_eu")
 ```
 
 Add/Remove Trials
@@ -317,6 +317,7 @@ There are two ways to add trials:
 -   Clinicaltrials.eu - "2007-003673-21" (omit the last two letters designating country)
 
 ```{r AddTrialsSideBySide}
+
 # One row with two columns. Uses Bootstrap 5 utilities (works with your theme).
 shiny::fluidRow(
   class = "g-3",  # nice gutter spacing
@@ -426,6 +427,7 @@ Select relevant registry and trial ID reference number below, along with any arc
 'Archiving' moves the trial information from the live lists to the relevant archived trials list, where it will no longer be updated. 'Deleting' will remove the trial from the live lists and information will not be stored
 
 ```{r Removetab}
+
 shiny::fluidRow(class = "g-3", shiny::column(width = 12, shiny::div(
   class = "card",
   shiny::div(class = "card-header h5 mb-0", "Remove or Archive Trial"),
@@ -1164,6 +1166,30 @@ output$no_change_cteu <- DT::renderDT({
                      "Abbreviated Title", "End of Trial Status", "Sponsor ID")
   )
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+```
+
+```{r ServerPubMed, context = "server", echo = FALSE}
+
+output$pubmed_nct <- DT::renderDT({
+  render_pubmed_table(raw_tables()[["NCT_PM"]])
+}, options = dt_opts_client, server = FALSE, filter = "top") |>
+  shiny::bindCache(mtime_reader())
+
+output$pubmed_isrctn <- DT::renderDT({
+  render_pubmed_table(raw_tables()[["ISRCTN_PM"]])
+}, options = dt_opts_client, server = FALSE, filter = "top") |>
+  shiny::bindCache(mtime_reader())
+
+output$pubmed_nihr <- DT::renderDT({
+  render_pubmed_table(raw_tables()[["NIHR_PM"]])
+}, options = dt_opts_client, server = FALSE, filter = "top") |>
+  shiny::bindCache(mtime_reader())
+
+output$pubmed_eu <- DT::renderDT({
+  render_pubmed_table(raw_tables()[["EU_PM"]])
+}, options = dt_opts_client, server = FALSE, filter = "top") |>
+  shiny::bindCache(mtime_reader())
+
 ```
 
 ```{r ServerUserInteractions, context = "server", echo = FALSE}
