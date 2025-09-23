@@ -127,7 +127,7 @@ last_two_cte_sql <- function(table, id_col) {              # why: compute last t
 }
 
 # PubMed: return a data.frame (NOT a DT widget); render with renderDT(server = FALSE)
-pubmed_df <- function(df) {
+render_pubmed_df <- function(df) {
   if (!base::nrow(df)) return(df)
   df |>
     dplyr::mutate(across(where(is.character), clean_utf8)) |>
@@ -609,7 +609,7 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
   DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
-```{r ServerCodeUpdates , context = "server"}
+```{r ServerCodeUpdates, context = "server", echo = FALSE}
 
 # Helper to render a "last refreshed" string into a given output ID
 render_last_refreshed <- function(id) {
@@ -637,10 +637,9 @@ refresh_all_data <- function() {
   invalidate_cache()
 }
 
-
 ```
 
-```{r ServerLiveTrialInfo , context = "server", echo = FALSE}
+```{r ServerLiveTrialInfo, context = "server", echo = FALSE}
 
 # ClinicalTrials.gov — Latest
 output$live_trial_table_nct <- DT::renderDT({
@@ -799,7 +798,7 @@ output$live_trial_table_eu <- DT::renderDT({
 
 ```
 
-```{r ServerRecentStatusChanges, context="server", echo=FALSE}
+```{r ServerRecentStatusChanges, context="server", echo = FALSE}
 # ---- DRY "+/-" diff engine (pure SQL) with "Changed Field" ----
 build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date, ids_tmp) {
   labels_sql <- base::paste(sprintf("COALESCE(n.%1$s,o.%1$s) AS %1$s", label_cols), collapse=",\n           ")
@@ -1004,7 +1003,7 @@ base::lapply(configs, function(cfg){
 })
 ```
 
-```{r ServerNoChangesInLast6M , context = "server",echo = FALSE}
+```{r ServerNoChangesInLast6M, context = "server", echo = FALSE}
 
 # Shared helper for no-change tables
 generate_nochange_table <- function(
@@ -1167,7 +1166,7 @@ output$no_change_cteu <- DT::renderDT({
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
-```{r ServerUserInteractions , context = "server", echo = FALSE}
+```{r ServerUserInteractions, context = "server", echo = FALSE}
 
 #### Functionality to add / remove / archive /comment
 
