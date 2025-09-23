@@ -860,8 +860,6 @@ output$live_trial_table_eu <- DT::renderDT({
 
 ```
 
-
-
 ```{r ServerRecentStatusChanges, context="server", echo = FALSE}
 
 build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date, ids_tmp) {
@@ -1150,7 +1148,7 @@ generate_nochange_table <- function(
 # Cached data producers
 nct_nochange_df <- shiny::reactive({
   generate_nochange_table(
-    data = nct_data(),
+    data = nct_tbl(),
     id_col = NCTId,
     rename_list = c(
       "Guideline" = "Guideline.number",
@@ -1176,7 +1174,7 @@ nct_nochange_df <- shiny::reactive({
 }) |> shiny::bindCache(mtime_reader()) |> shiny::bindEvent(mtime_reader())
 isrctn_nochange_df <- shiny::reactive({
   generate_nochange_table(
-    data = isrctn_data(),
+    data = isr_tbl(),
     id_col = ISRCTN_No,
     rename_list = c(
       "Guideline" = "Guideline.number",
@@ -1204,7 +1202,7 @@ isrctn_nochange_df <- shiny::reactive({
 }) |> shiny::bindCache(mtime_reader()) |> shiny::bindEvent(mtime_reader())
 nihr_nochange_df <- shiny::reactive({
   generate_nochange_table(
-    data = nihr_data(),
+    data = nihr_tbl(),
     id_col = project_id,
     rename_list = c(
       "Guideline" = "Guideline.number",
@@ -1218,7 +1216,7 @@ nihr_nochange_df <- shiny::reactive({
 }) |> shiny::bindCache(mtime_reader()) |> shiny::bindEvent(mtime_reader())
 eu_nochange_df <- shiny::reactive({
   generate_nochange_table(
-    data = eu_data() |> dplyr::select(
+    data = eu_tbl() |> dplyr::select(
       -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language,
       -EU_Ids
     ),
