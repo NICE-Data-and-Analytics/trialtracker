@@ -505,7 +505,7 @@ Row {.tabset .tabset-fade}
 
 ```{r CG.govarchive}
 
-DBI::dbReadTable(main_con, "NCT_rxv") |>
+DBI::dbReadTable(pool_con, "NCT_rxv") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
@@ -537,7 +537,7 @@ DBI::dbReadTable(main_con, "NCT_rxv") |>
 
 ```{r ISRCTNarchivetable}
 
-DBI::dbReadTable(main_con, "ISRCTN_rxv") |>
+DBI::dbReadTable(pool_con, "ISRCTN_rxv") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
@@ -567,7 +567,7 @@ DBI::dbReadTable(main_con, "ISRCTN_rxv") |>
 
 ```{r NIHRarchivetable}
 
-DBI::dbReadTable(main_con, "NIHR_rxv") |>
+DBI::dbReadTable(pool_con, "NIHR_rxv") |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
   ) |>
@@ -592,7 +592,7 @@ DBI::dbReadTable(main_con, "NIHR_rxv") |>
 
 ```{r EUarchivetable}
 
-DBI::dbReadTable(main_con, "EU_rxv") |>
+DBI::dbReadTable(pool_con, "EU_rxv") |>
   dplyr::select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids) |>
   dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
     `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
@@ -1205,7 +1205,7 @@ sql_add <-
 # Reactive to create SQL statement to add single trial
 exp_add <- shiny::reactive({
   DBI::sqlInterpolate(
-    main_con,
+    pool_con,
     sql_add,
     registry = DBI::SQL(input$registry_add),
     program_value = input$guideline_program_add,
@@ -1226,7 +1226,7 @@ shiny::observeEvent(input$button_add, {
   if (valid_id_check) {
     shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trial - please wait while the dashboard refreshes in background....")
 
-    DBI::dbExecute(main_con, exp_add())
+    DBI::dbExecute(pool_con, exp_add())
 
     refresh_all_data()
 
@@ -1332,7 +1332,7 @@ shiny::observeEvent(input$button_add_multi, {
   if (length(multi_errors) == 0L) {
     shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Adding Trials - please wait while the dashboard refreshes in background....")
 
-    DBI::dbAppendTable(main_con, "Trial_Ids", to_add())
+    DBI::dbAppendTable(pool_con, "Trial_Ids", to_add())
 
     refresh_all_data()
 
@@ -1362,7 +1362,7 @@ sql_delete <- "DELETE FROM Trial_Ids WHERE ?ColID = ?ID_Selected"
 # Reactive to pull id to insert into SQL delete request
 exp_delete <- shiny::reactive({
   DBI::sqlInterpolate(
-    main_con,
+    pool_con,
     sql_delete,
     ColID = DBI::SQL(dplyr::case_when(
       input$registry_remove == "NIHR_Ids" ~ "REPLACE(REPLACE(NIHR_Ids, '-', ''),'/','')",
@@ -1383,7 +1383,7 @@ output$exp_delete <- shiny::renderText(exp_delete())
 shiny::observeEvent(input$button_delete, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Deleting Trial - please wait while the dashboard refreshes in background....")
 
-  DBI::dbExecute(main_con, exp_delete())
+  DBI::dbExecute(pool_con, exp_delete())
 
   refresh_all_data()
 
@@ -1394,7 +1394,7 @@ shiny::observeEvent(input$button_delete, {
 
 #Update remove list
 shiny::observeEvent(input$registry_remove, {
-  choices_list <- DBI::dbReadTable(main_con, "Trial_Ids") |>
+  choices_list <- DBI::dbReadTable(pool_con, "Trial_Ids") |>
     dplyr::select(ids = input$registry_remove) |>
     tidyr::drop_na() |>
     dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-")) |> 
@@ -1413,7 +1413,7 @@ sql_archive <- "SELECT * FROM ?Orig_Table WHERE ?ColID = ?ID_Selected"
 # Reactive for pulling id to insert into SQL archiving request
 exp_archive_pull <- shiny::reactive({
   DBI::sqlInterpolate(
-    main_con,
+    pool_con,
     sql_archive,
     Orig_Table = DBI::SQL(stringr::str_sub(input$registry_remove, end = -5L)),
     ColID = DBI::SQL(dplyr::case_when(
@@ -1437,14 +1437,14 @@ output$exp_archive <- shiny::renderText(exp_archive_pull())
 shiny::observeEvent(input$button_archive, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Archiving Trial - please wait while the dashboard refreshes in background....")
 
-  pulled_trial_data <- DBI::dbGetQuery(main_con, exp_archive_pull()) |>
+  pulled_trial_data <- DBI::dbGetQuery(pool_con, exp_archive_pull()) |>
     dplyr::slice_max(Query_Date) |>
     dplyr::mutate("Archiving_Comments" = stringr::str_remove(paste(Comments, as.character(input$comments_archive), collapse = " "), "NA"))
 
   # write to db (append)
-  DBI::dbWriteTable(main_con, paste0(stringr::str_sub(input$registry_remove, end = -5L), "_rxv"), pulled_trial_data, append = TRUE)
+  DBI::dbWriteTable(pool_con, paste0(stringr::str_sub(input$registry_remove, end = -5L), "_rxv"), pulled_trial_data, append = TRUE)
 
-  DBI::dbExecute(main_con, exp_delete())
+  DBI::dbExecute(pool_con, exp_delete())
 
   refresh_all_data()
 
