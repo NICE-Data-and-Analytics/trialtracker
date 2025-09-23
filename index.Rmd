@@ -669,7 +669,7 @@ output$live_trial_table_nct <- DT::renderDT({
 # --- ISRCTN latest (reactive data) ---
 isr_latest_df <- shiny::reactive({
   base_sql <- latest_sql("ISRCTN", "ISRCTN")
-  .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN", isr_ids(), function(has_ids) {
+  .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN_No", isr_ids(), function(has_ids) {
     if (has_ids) {
       DBI::dbGetQuery(pool_con, glue::glue("
         WITH latest AS ({base_sql})
