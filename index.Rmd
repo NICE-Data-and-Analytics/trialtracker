@@ -12,7 +12,68 @@ runtime: shiny
 
 ```{r setup, context = "server", echo=FALSE, include=FALSE}
 
-db_path <- file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
+# Cached loads for all tables (refresh when the SQLite file's mtime changes)
+db_path  <- base::file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
+pool_con <- pool::dbPool(RSQLite::SQLite(), dbname = db_path)
+shiny::onStop(function() pool::poolClose(pool_con))
+
+# (Optional, safe reads – uncomment later in Stage 6)
+DBI::dbExecute(pool_con, "PRAGMA journal_mode=WAL;")
+DBI::dbExecute(pool_con, "PRAGMA synchronous=NORMAL;")
+DBI::dbExecute(pool_con, "PRAGMA temp_store=MEMORY;")
+DBI::dbExecute(pool_con, "PRAGMA mmap_size=134217728;")
+
+mtime_reader <- shiny::reactiveFileReader(
+  intervalMillis = 3000L,
+  session        = shiny::getDefaultReactiveDomain(),
+  filePath       = db_path,
+  readFunc       = function(path) base::file.info(path)$mtime
+)
+invalidate_cache <- function() { base::invisible(mtime_reader()) }  # call right after add/remove/archive
+
+# Read once per mtime tick; reuse everywhere
+raw_tables <- shiny::reactive({
+  mtime_reader()
+  tbls <- DBI::dbListTables(pool_con)
+  list(
+    NCT       = if ("NCT"       %in% tbls) DBI::dbReadTable(pool_con, "NCT") else base::data.frame(),
+    ISRCTN    = if ("ISRCTN"    %in% tbls) DBI::dbReadTable(pool_con, "ISRCTN") else base::data.frame(),
+    EU        = if ("EU"        %in% tbls) DBI::dbReadTable(pool_con, "EU") else base::data.frame(),
+    NIHR      = if ("NIHR"      %in% tbls) DBI::dbReadTable(pool_con, "NIHR") else base::data.frame(),
+    Trial_Ids = if ("Trial_Ids" %in% tbls) DBI::dbReadTable(pool_con, "Trial_Ids") else base::data.frame(),
+    NCT_PM    = if ("NCT_PM"     %in% tbls) DBI::dbReadTable(pool_con, "NCT_PM")     else base::data.frame(),
+    ISRCTN_PM = if ("ISRCTN_PM"  %in% tbls) DBI::dbReadTable(pool_con, "ISRCTN_PM")  else base::data.frame(),
+    NIHR_PM   = if ("NIHR_PM"    %in% tbls) DBI::dbReadTable(pool_con, "NIHR_PM")    else base::data.frame(),
+    EU_PM     = if ("EU_PM"      %in% tbls) DBI::dbReadTable(pool_con, "EU_PM")      else base::data.frame()
+  )
+}) |> shiny::bindCache(mtime_reader())
+
+# Small utils
+fast_trunc <- function(x, n = 120L) { x <- base::as.character(x); i <- base::nchar(x) > n; x[i] <- base::paste0(base::substr(x[i],1L,n),"…"); x }
+latest_by_id <- function(df, id_col, date_col = "Query_Date") {
+  if (!base::nrow(df)) return(df)
+  # Works even if Query_Date is integer/char; we coerce to Date safely
+  df |>
+    dplyr::mutate(
+      !!date_col := base::suppressWarnings(base::as.Date(.data[[date_col]]))
+    ) |>
+    dplyr::group_by(.data[[id_col]]) |>
+    dplyr::slice_max(order_by = .data[[date_col]], n = 1, with_ties = FALSE) |>
+    dplyr::ungroup()
+}
+
+# Standard DT options: server-side + paging (no nested scrolling)
+dt_opts_server <- base::list(
+  pageLength  = 50L,
+  lengthMenu  = c(25L, 50L, 100L),
+  deferRender = TRUE,
+  searchDelay = 300L,
+  dom         = "tip"
+)
+
+## OLD SETUP CHUNK FROM HERE
+
+#db_path <- base::file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
 main_con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
 trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
 
@@ -607,31 +668,26 @@ render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols
 
 # Live trial status tables
 output$live_trial_table_nct <- DT::renderDT({
-  
-  req(main_con, trial_id_df, nct_data())
 
-  render_live_trial_table(
-    data = nct_data(),
-    id_col = NCTId,
-    ids = trial_id_df$NCT_Ids,
-    rename_list = c(
-      Guideline = "Guideline.number",
-      `NCT ID` = "NCTId",
-      `Org Study ID` = "OrgStudyId",
-      Title = "BriefTitle",
-      Status = "OverallStatus",
-      `Primary Completion Date` = "PrimaryCompletionDate",
-      `Completion Date` = "CompletionDate",
-      `Results Submit Date` = "ResultsFirstSubmitDate",
-      `Results Post Date` = "ResultsFirstPostDate",
-      `Last Update` = "LastUpdatePostDate"
-    ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "NCT ID", "Org Study ID", "Title", "Status",
-                     "Primary Completion Date", "Completion Date", "Results Submit Date", "Results Post Date", "Last Update"),
-    extra_mutate = ~ dplyr::mutate(., across(PrimaryCompletionDate:LastUpdatePostDate,
-                                ~ lubridate::as_date(lubridate::parse_date_time(., c("ymd", "bdy"), truncated = 1))))
-  )
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+  nct <- raw_tables()[["NCT"]]
+  if (!base::nrow(nct)) base::return(base::data.frame())
+
+  # Compute latest row per NCTId once (cheap in R for first step)
+  latest <- latest_by_id(nct, id_col = "NCTId", date_col = "Query_Date")
+
+  latest |>
+    dplyr::transmute(
+      Program             = .data[["Program"]],
+      Guideline           = .data[["Guideline.number"]],
+      `Query Date`        = base::format(base::suppressWarnings(base::as.Date(.data[["Query_Date"]])), "%Y-%m-%d"),
+      `NCT ID`            = .data[["NCTId"]],
+      Title               = fast_trunc(.data[["BriefTitle"]], 120L),
+      Status              = .data[["OverallStatus"]]
+    )
+}, options = dt_opts_server, server = TRUE, filter = "top") |>
+  shiny::bindCache(mtime_reader()) |>
+  shiny::bindEvent(mtime_reader())
+
 output$live_trial_table_isrctn <- DT::renderDT({
   
   req(main_con, trial_id_df, isrctn_data())
