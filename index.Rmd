@@ -703,48 +703,79 @@ isr_latest_df <- shiny::reactive({
   shiny::bindCache(mtime_reader(), isr_ids()) |>
   shiny::bindEvent(mtime_reader())
 
+# ISRCTN — Latest (Program, Guideline, Date Added, URL, ISRCTN ID, Title, Acronym,
+#                  Scientific Title, Recruitment Status, Results Completed date, Results URL, Results summary)
 output$live_trial_table_isrctn <- DT::renderDT({
-  base_sql <- latest_sql("ISRCTN", "ISRCTN")
-  df <- .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN", isr_ids(), function(has_ids) {
+  base_sql <- latest_sql("ISRCTN", "ISRCTN_No")  # <- correct id column
+
+  df <- .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN_No", isr_ids(), function(has_ids) {
     if (has_ids) {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        WITH latest AS ({base_sql})
-        SELECT Program,
-               `Guideline.number` AS Guideline,
-               DATE(Query_Date)   AS `Query Date`,
-               ISRCTN             AS `ISRCTN`,
-               primary_title      AS Title,
-               registration_status AS `Recruitment Status`,
-               Results_url_link    AS `Results URL`,
-               Results_summary     AS `Results summary`,
-               Results_date_completed AS `Results_date_completed`,
-               Results_date_posted    AS `Results_date_posted`,
-               Results_date_first_publication AS `Results_date_first_publication`,
-               URL
-        FROM latest JOIN _tmp_isr_ids USING(ISRCTN)
-        ORDER BY `Query Date` DESC, `ISRCTN`
-      "))
+      DBI::dbGetQuery(pool_con, glue::glue('
+        WITH latest AS ({base_sql}),
+             first_seen AS (
+               SELECT "ISRCTN_No", DATE(MIN("Query_Date")) AS "Date Added"
+               FROM "ISRCTN" JOIN _tmp_isr_ids USING("ISRCTN_No")
+               GROUP BY "ISRCTN_No"
+             )
+        SELECT
+          latest."Program"                                    AS "Program",
+          latest."Guideline.number"                           AS "Guideline",
+          first_seen."Date Added"                             AS "Date Added",
+          latest."URL"                                        AS "URL",
+          latest."ISRCTN_No"                                  AS "ISRCTN ID",
+          COALESCE(latest."Public_Title", latest."primary_title")                  AS "Title",
+          latest."Acronym"                                    AS "Acronym",
+          COALESCE(latest."Scientific_Title", latest."scientific_title")          AS "Scientific Title",
+          COALESCE(latest."Recruitment_Status", latest."registration_status")     AS "Recruitment Status",
+          COALESCE(latest."Results_date_completed", latest."results_date_completed") AS "Results Completed date",
+          COALESCE(latest."Results_url_link", latest."results_url_link")          AS "Results URL",
+          COALESCE(latest."Results_summary", latest."results_summary")            AS "Results summary"
+        FROM latest
+        JOIN first_seen USING("ISRCTN_No")
+        JOIN _tmp_isr_ids USING("ISRCTN_No")
+        ORDER BY "Date Added" DESC, "ISRCTN ID"
+      '))
     } else {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
-               ISRCTN AS `ISRCTN`, primary_title AS Title, registration_status AS `Recruitment Status`,
-               Results_url_link AS `Results URL`, Results_summary AS `Results summary`,
-               Results_date_completed, Results_date_posted, Results_date_first_publication, URL
-        FROM ({base_sql})
-        ORDER BY `Query Date` DESC, `ISRCTN`
-      "))
+      DBI::dbGetQuery(pool_con, glue::glue('
+        WITH latest AS ({base_sql}),
+             first_seen AS (
+               SELECT "ISRCTN_No", DATE(MIN("Query_Date")) AS "Date Added"
+               FROM "ISRCTN"
+               GROUP BY "ISRCTN_No"
+             )
+        SELECT
+          latest."Program"                                    AS "Program",
+          latest."Guideline.number"                           AS "Guideline",
+          first_seen."Date Added"                             AS "Date Added",
+          latest."URL"                                        AS "URL",
+          latest."ISRCTN_No"                                  AS "ISRCTN ID",
+          COALESCE(latest."Public_Title", latest."primary_title")                  AS "Title",
+          latest."Acronym"                                    AS "Acronym",
+          COALESCE(latest."Scientific_Title", latest."scientific_title")          AS "Scientific Title",
+          COALESCE(latest."Recruitment_Status", latest."registration_status")     AS "Recruitment Status",
+          COALESCE(latest."Results_date_completed", latest."results_date_completed") AS "Results Completed date",
+          COALESCE(latest."Results_url_link", latest."results_url_link")          AS "Results URL",
+          COALESCE(latest."Results_summary", latest."results_summary")            AS "Results summary"
+        FROM latest
+        JOIN first_seen USING("ISRCTN_No")
+        ORDER BY "Date Added" DESC, "ISRCTN ID"
+      '))
     }
   })
+
   if (!base::nrow(df)) base::return(df)
-  df <- df |>
+
+  df |>
     dplyr::mutate(
       Title = fast_trunc(.data[["Title"]], 120L),
-      `Results_date_completed`        = lubridate::dmy(.data[["Results_date_completed"]]),
-      `Results_date_posted`           = lubridate::dmy(.data[["Results_date_posted"]]),
-      `Results_date_first_publication`= lubridate::dmy(.data[["Results_date_first_publication"]])
+      `Results Completed date` = base::suppressWarnings(lubridate::dmy(.data[["Results Completed date"]]))
+    ) |>
+    dplyr::select(
+      dplyr::all_of(c(
+        "Program","Guideline","Date Added","URL","ISRCTN ID","Title","Acronym",
+        "Scientific Title","Recruitment Status","Results Completed date","Results URL","Results summary"
+      ))
     )
-
-  sel_front(df, c("Program","Guideline","Query Date","URL","ISRCTN","Title"))
 }, options = dt_opts_server, server = TRUE, filter = "top")
 
 # --- NIHR latest (reactive data) ---
