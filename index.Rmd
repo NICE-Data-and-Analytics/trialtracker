@@ -676,7 +676,7 @@ isr_latest_df <- shiny::reactive({
         SELECT Program,
                `Guideline.number` AS Guideline,
                DATE(Query_Date)   AS `Query Date`,
-               ISRCTN             AS `ISRCTN`,
+               ISRCTN_No          AS `ISRCTN No`,
                primary_title      AS Title,
                registration_status AS `Recruitment Status`,
                Results_url_link    AS `Results URL`,
@@ -685,13 +685,13 @@ isr_latest_df <- shiny::reactive({
                Results_date_posted    AS `Results_date_posted`,
                Results_date_first_publication AS `Results_date_first_publication`,
                URL
-        FROM latest JOIN _tmp_isr_ids USING(ISRCTN)
-        ORDER BY `Query Date` DESC, `ISRCTN`
+        FROM latest JOIN _tmp_isr_ids USING(ISRCTN_No)
+        ORDER BY `Query Date` DESC, `ISRCTN_No`
       "))
     } else {
       DBI::dbGetQuery(pool_con, glue::glue("
         SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
-               ISRCTN AS `ISRCTN`, primary_title AS Title, registration_status AS `Recruitment Status`,
+               ISRCTN_No AS `ISRCTN Number`, primary_title AS Title, registration_status AS `Recruitment Status`,
                Results_url_link AS `Results URL`, Results_summary AS `Results summary`,
                Results_date_completed, Results_date_posted, Results_date_first_publication, URL
         FROM ({base_sql})
