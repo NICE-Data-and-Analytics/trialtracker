@@ -782,116 +782,58 @@ output$live_trial_table_nct <- DT::renderDT({
   df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
 }, options = dt_opts_server, server = TRUE, filter = "top")
 
-# --- ISRCTN latest (reactive data) ---
-isr_latest_df <- shiny::reactive({
-  base_sql <- latest_sql("ISRCTN", "ISRCTN")
-  .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN_No", isr_ids(), function(has_ids) {
-    if (has_ids) {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        WITH latest AS ({base_sql})
-        SELECT Program,
-               `Guideline.number` AS Guideline,
-               DATE(Query_Date)   AS `Query Date`,
-               ISRCTN_No          AS `ISRCTN No`,
-               primary_title      AS Title,
-               registration_status AS `Recruitment Status`,
-               Results_url_link    AS `Results URL`,
-               Results_summary     AS `Results summary`,
-               Results_date_completed AS `Results_date_completed`,
-               Results_date_posted    AS `Results_date_posted`,
-               Results_date_first_publication AS `Results_date_first_publication`,
-               URL
-        FROM latest JOIN _tmp_isr_ids USING(ISRCTN_No)
-        ORDER BY `Query Date` DESC, `ISRCTN_No`
-      "))
-    } else {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
-               ISRCTN_No AS `ISRCTN Number`, primary_title AS Title, registration_status AS `Recruitment Status`,
-               Results_url_link AS `Results URL`, Results_summary AS `Results summary`,
-               Results_date_completed, Results_date_posted, Results_date_first_publication, URL
-        FROM ({base_sql})
-        ORDER BY `Query Date` DESC, `ISRCTN`
-      "))
-    }
-  })
-}) |>
-  shiny::bindCache(mtime_reader(), isr_ids()) |>
-  shiny::bindEvent(mtime_reader())
+## --- ISRCTN “Latest” SQL builder (non-reactive) ---
+isr_latest_sql_from_trial_ids <- function(con) {
+  glue::glue_sql("
+WITH
+  ids AS (
+    SELECT DISTINCT TRIM(\"ISRCTN_Ids\") AS \"ISRCTN_No\"
+    FROM \"Trial_Ids\"
+    WHERE \"ISRCTN_Ids\" IS NOT NULL AND TRIM(\"ISRCTN_Ids\") <> ''
+  ),
+  base AS (
+    SELECT i.*
+    FROM \"ISRCTN\" i
+    JOIN ids USING (\"ISRCTN_No\")
+  ),
+  latest_rank AS (
+    SELECT base.*,
+           ROW_NUMBER() OVER (PARTITION BY \"ISRCTN_No\" ORDER BY \"Query_Date\" DESC) AS rn
+    FROM base
+  ),
+  latest AS (SELECT * FROM latest_rank WHERE rn = 1),
+  first_seen AS (
+    SELECT \"ISRCTN_No\", DATE(MIN(\"Query_Date\")) AS \"Date Added\"
+    FROM base
+    GROUP BY \"ISRCTN_No\"
+  )
+SELECT
+  latest.\"Program\"                      AS \"Program\",
+  latest.\"Guideline.number\"             AS \"Guideline\",
+  first_seen.\"Date Added\"               AS \"Date Added\",
+  latest.\"URL\"                          AS \"URL\",
+  latest.\"ISRCTN_No\"                    AS \"ISRCTN ID\",
+  latest.\"Public_Title\"                 AS \"Title\",
+  latest.\"Acronym\"                      AS \"Acronym\",
+  latest.\"Scientific_Title\"             AS \"Scientific Title\",
+  latest.\"Recruitment_Status\"           AS \"Recruitment Status\",
+  latest.\"Results_date_completed\"       AS \"Results Completed Date\",
+  latest.\"Results_url_link\"             AS \"Results URL Link\",
+  latest.\"Results_summary\"              AS \"Results Summary\",
+  latest.\"Results_date_posted\"          AS \"Results Posted Date\",
+  latest.\"Results_date_first_publication\" AS \"Results Published Date\"
+FROM latest
+JOIN first_seen USING (\"ISRCTN_No\")
+ORDER BY \"Date Added\" DESC, \"ISRCTN ID\";
+", .con = con)
+}
 
-# ISRCTN — Latest (Program, Guideline, Date Added, URL, ISRCTN ID, Title, Acronym,
-#                  Scientific Title, Recruitment Status, Results Completed date, Results URL, Results summary)
+# --- Execute inside renderDT (reactivity happens here) ---
 output$live_trial_table_isrctn <- DT::renderDT({
-  base_sql <- latest_sql("ISRCTN", "ISRCTN_No")  # <- correct id column
-
-  df <- .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN_No", isr_ids(), function(has_ids) {
-    if (has_ids) {
-      DBI::dbGetQuery(pool_con, glue::glue('
-        WITH latest AS ({base_sql}),
-             first_seen AS (
-               SELECT "ISRCTN_No", DATE(MIN("Query_Date")) AS "Date Added"
-               FROM "ISRCTN" JOIN _tmp_isr_ids USING("ISRCTN_No")
-               GROUP BY "ISRCTN_No"
-             )
-        SELECT
-          latest."Program"                                    AS "Program",
-          latest."Guideline.number"                           AS "Guideline",
-          first_seen."Date Added"                             AS "Date Added",
-          latest."URL"                                        AS "URL",
-          latest."ISRCTN_No"                                  AS "ISRCTN ID",
-          COALESCE(latest."Public_Title", latest."primary_title")                  AS "Title",
-          latest."Acronym"                                    AS "Acronym",
-          COALESCE(latest."Scientific_Title", latest."scientific_title")          AS "Scientific Title",
-          COALESCE(latest."Recruitment_Status", latest."registration_status")     AS "Recruitment Status",
-          COALESCE(latest."Results_date_completed", latest."results_date_completed") AS "Results Completed date",
-          COALESCE(latest."Results_url_link", latest."results_url_link")          AS "Results URL",
-          COALESCE(latest."Results_summary", latest."results_summary")            AS "Results summary"
-        FROM latest
-        JOIN first_seen USING("ISRCTN_No")
-        JOIN _tmp_isr_ids USING("ISRCTN_No")
-        ORDER BY "Date Added" DESC, "ISRCTN ID"
-      '))
-    } else {
-      DBI::dbGetQuery(pool_con, glue::glue('
-        WITH latest AS ({base_sql}),
-             first_seen AS (
-               SELECT "ISRCTN_No", DATE(MIN("Query_Date")) AS "Date Added"
-               FROM "ISRCTN"
-               GROUP BY "ISRCTN_No"
-             )
-        SELECT
-          latest."Program"                                    AS "Program",
-          latest."Guideline.number"                           AS "Guideline",
-          first_seen."Date Added"                             AS "Date Added",
-          latest."URL"                                        AS "URL",
-          latest."ISRCTN_No"                                  AS "ISRCTN ID",
-          COALESCE(latest."Public_Title", latest."primary_title")                  AS "Title",
-          latest."Acronym"                                    AS "Acronym",
-          COALESCE(latest."Scientific_Title", latest."scientific_title")          AS "Scientific Title",
-          COALESCE(latest."Recruitment_Status", latest."registration_status")     AS "Recruitment Status",
-          COALESCE(latest."Results_date_completed", latest."results_date_completed") AS "Results Completed date",
-          COALESCE(latest."Results_url_link", latest."results_url_link")          AS "Results URL",
-          COALESCE(latest."Results_summary", latest."results_summary")            AS "Results summary"
-        FROM latest
-        JOIN first_seen USING("ISRCTN_No")
-        ORDER BY "Date Added" DESC, "ISRCTN ID"
-      '))
-    }
-  })
-
+  sql <- isr_latest_sql_from_trial_ids(pool_con)
+  df  <- DBI::dbGetQuery(pool_con, sql)
   if (!base::nrow(df)) base::return(df)
-
-  df |>
-    dplyr::mutate(
-      Title = fast_trunc(.data[["Title"]], 120L),
-      `Results Completed date` = base::suppressWarnings(lubridate::dmy(.data[["Results Completed date"]]))
-    ) |>
-    dplyr::select(
-      dplyr::all_of(c(
-        "Program","Guideline","Date Added","URL","ISRCTN ID","Title","Acronym",
-        "Scientific Title","Recruitment Status","Results Completed date","Results URL","Results summary"
-      ))
-    )
+  df
 }, options = dt_opts_server, server = TRUE, filter = "top")
 
 # --- NIHR latest (reactive data) ---
