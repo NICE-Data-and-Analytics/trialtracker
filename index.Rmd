@@ -55,26 +55,32 @@ raw_tables <- shiny::reactive({
   )
 })
 
-# ID vectors
+# ID vectors (reactive)
 nct_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]]
-  if (!"NCT_Ids" %in% base::names(ids)) base::character()
-  else ids$NCT_Ids |> base::na.omit() |> base::unique()
+  ids <- raw_tables()[["Trial_Ids"]][["NCT_Ids"]]
+  if (is.null(ids)) character()
+  unique(ids[!is.na(ids) & nzchar(ids)])
 })
+
 isr_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]]
-  if (!"ISRCTN_Ids" %in% base::names(ids)) base::character()
-  else ids$ISRCTN_Ids |> base::na.omit() |> base::unique()
+  ids <- raw_tables()[["Trial_Ids"]][["ISRCTN_Ids"]]
+  if (is.null(ids)) character()
+  unique(ids[!is.na(ids) & nzchar(ids)])
 })
-eu_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]]
-  if (!"EU_Ids" %in% base::names(ids)) base::character()
-  else ids$EU_Ids |> base::na.omit() |> base::unique()
-})
+
 nihr_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]]
-  if (!"NIHR_Ids" %in% base::names(ids)) base::character()
-  else ids$NIHR_Ids |> base::na.omit() |> base::unique()
+  ids <- raw_tables()[["Trial_Ids"]][["NIHR_Ids"]]
+  if (is.null(ids)) character()
+  # Normalize by stripping non-digits when matching downstream
+  ids <- gsub("[^0-9]", "", ids)
+  ids[nzchar(ids)]
+  unique(ids[nzchar(ids)])
+})
+
+eu_ids <- shiny::reactive({
+  ids <- raw_tables()[["Trial_Ids"]][["EU_Ids"]]
+  if (is.null(ids)) character()
+  unique(ids[!is.na(ids) & nzchar(ids)])
 })
 
 # Helpers
