@@ -61,13 +61,11 @@ nct_ids <- shiny::reactive({
   if (is.null(ids)) character()
   unique(ids[!is.na(ids) & nzchar(ids)])
 })
-
 isr_ids <- shiny::reactive({
   ids <- raw_tables()[["Trial_Ids"]][["ISRCTN_Ids"]]
   if (is.null(ids)) character()
   unique(ids[!is.na(ids) & nzchar(ids)])
 })
-
 nihr_ids <- shiny::reactive({
   ids <- raw_tables()[["Trial_Ids"]][["NIHR_Ids"]]
   if (is.null(ids)) character()
@@ -76,7 +74,6 @@ nihr_ids <- shiny::reactive({
   ids[nzchar(ids)]
   unique(ids[nzchar(ids)])
 })
-
 eu_ids <- shiny::reactive({
   ids <- raw_tables()[["Trial_Ids"]][["EU_Ids"]]
   if (is.null(ids)) character()
@@ -89,15 +86,17 @@ fast_trunc <- function(x, n = 120L) {                      # UI-only truncation,
   x <- base::as.character(x); i <- base::nchar(x) > n
   x[i] <- base::paste0(base::substr(x[i], 1L, n), "…"); x
 }
-latest_sql <- function(table, id_col) {                    # why: “latest per ID” in SQL (fast, no R copies)
-  glue::glue("
-    SELECT * FROM (
-      SELECT
-        *,
-        ROW_NUMBER() OVER (PARTITION BY {id_col} ORDER BY Query_Date DESC) AS rn
-      FROM {table}
-    ) WHERE rn = 1
-  ")
+latest_sql <- function(table, id_col) {
+  table_q <- .qidt(table); id_q <- .qidt(id_col)
+  sprintf('
+    SELECT *
+    FROM (
+      SELECT t.*,
+             ROW_NUMBER() OVER (PARTITION BY %s ORDER BY "Query_Date" DESC) AS rn
+      FROM %s t
+    )
+    WHERE rn = 1
+  ', id_q, table_q)
 }
 last_two_cte_sql <- function(table, id_col) {              # why: compute last two rows once; join for diffs
   glue::glue("
@@ -111,30 +110,38 @@ last_two_cte_sql <- function(table, id_col) {              # why: compute last t
     o AS (SELECT * FROM last2 WHERE rn = 2)
   ")
 }
-.with_temp_ids <- function(con, tmp_name, col_name, values, code) {
-  if (!base::length(values)) base::return(code(FALSE))
-  DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp_name};"))
-  DBI::dbExecute(con, glue::glue("CREATE TEMP TABLE {tmp_name} ({col_name} TEXT PRIMARY KEY);"))
-  step <- 10000L; n <- base::length(values)
-  for (s in base::seq(1L, n, by = step)) {
-    e <- base::min(s + step - 1L, n)
-    DBI::dbWriteTable(
-      con, tmp_name,
-      stats::setNames(base::data.frame(values[s:e], check.names = FALSE), col_name),
-      append = TRUE
-    )
+.with_temp_ids <- function(pool, tmp_name, id_col, ids, code_fn) {
+  id_col_q <- .qidt(id_col)
+  tmp_q    <- .qidt(tmp_name)
+  DBI::dbExecute(pool, sprintf("DROP TABLE IF EXISTS %s;", tmp_q))
+  DBI::dbExecute(pool, sprintf("CREATE TEMP TABLE %s (%s TEXT PRIMARY KEY);", tmp_q, id_col_q))
+  if (length(ids)) {
+    df <- stats::setNames(base::data.frame(ids, check.names = FALSE), gsub('"','', id_col_q, fixed = TRUE))
+    DBI::dbWriteTable(pool, tmp_name, df, append = TRUE)
   }
-  on.exit(DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp_name};")), add = TRUE)
-  code(TRUE)
+  on.exit(DBI::dbExecute(pool, sprintf("DROP TABLE IF EXISTS %s;", tmp_q)), add = TRUE)
+  force(code_fn(length(ids) > 0L))
 }
 sel_front <- function(.df, front) {
   dplyr::select(.df, dplyr::all_of(front), dplyr::everything())
 }
 
+# SQL Quoting helpers
+.qi <- function(x) as.character(DBI::dbQuoteIdentifier(pool_con, x))
+.qq <- function(alias, col) sprintf('%s."%s"', alias, gsub("`", "", col, fixed = TRUE))
+.qcols <- function(alias, cols) vapply(cols, function(c) .qq(alias, c), character(1))
+.qidt <- function(x) sprintf('"%s"', gsub("`", "", x, fixed = TRUE))  # "col" or "table"
+
 # DT options (server for big tables; client for smaller PubMed tables)
 dt_opts_server <- base::list(pageLength = 50L, lengthMenu = c(25L, 50L, 100L), deferRender = TRUE, searchDelay = 300L, dom = "tip")
 dt_opts_client <- base::list(pageLength = 25L, dom = "tip")
-  
+
+# Table wrappers (so chunks that still call *_data() have data)
+nct_tbl  <- shiny::reactive({ if ("NCT"    %in% DBI::dbListTables(pool_con)) DBI::dbGetQuery(pool_con, 'SELECT * FROM "NCT"')    else base::data.frame() })
+isr_tbl  <- shiny::reactive({ if ("ISRCTN" %in% DBI::dbListTables(pool_con)) DBI::dbGetQuery(pool_con, 'SELECT * FROM "ISRCTN"') else base::data.frame() })
+nihr_tbl <- shiny::reactive({ if ("NIHR"   %in% DBI::dbListTables(pool_con)) DBI::dbGetQuery(pool_con, 'SELECT * FROM "NIHR"')   else base::data.frame() })
+eu_tbl   <- shiny::reactive({ if ("EU"     %in% DBI::dbListTables(pool_con)) DBI::dbGetQuery(pool_con, 'SELECT * FROM "EU"')     else base::data.frame() })
+
 ```
 
 ```{css, echo=FALSE}
@@ -826,26 +833,16 @@ output$live_trial_table_eu <- DT::renderDT({
 
 ```{r ServerRecentStatusChanges, context="server", echo = FALSE}
 
-# Quoting helpers
-.qi <- function(x) as.character(DBI::dbQuoteIdentifier(pool_con, x))
-.qq <- function(alias, col) sprintf('%s."%s"', alias, gsub('`', '', col, fixed = TRUE))  # n."Program"
-.qcols <- function(alias, cols) vapply(cols, function(c) .qq(alias, c), character(1))
-
 build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date, ids_tmp) {
-  # normalize raw names (no backticks); quoting happens in .qq()
   label_cols <- gsub("`", "", label_cols, fixed = TRUE)
   id_col     <- gsub("`", "", id_col,     fixed = TRUE)
   table      <- gsub("`", "", table,      fixed = TRUE)
 
-  # Labels shown on every row (add Date Added from fs)
   label_cols_plus <- c(label_cols, "Date Added")
 
   coalesce_label <- function(col) {
-    if (col == "Date Added") {
-      sprintf('base."%s" AS "%s"', col, col)
-    } else {
-      sprintf('COALESCE(%s, %s) AS "%s"', .qq("n", col), .qq("o", col), col)
-    }
+    if (col == "Date Added") sprintf('base."%s" AS "%s"', col, col)
+    else sprintf('COALESCE(%s, %s) AS "%s"', .qq("n", col), .qq("o", col), col)
   }
   labels_sql <- paste(vapply(label_cols_plus, coalesce_label, character(1)), collapse = ",\n           ")
 
@@ -897,7 +894,6 @@ build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, c
   ctx_news_clause  <- if (nzchar(ctx_news))  paste0(", ", ctx_news) else ""
   ctx_nulls_clause <- if (nzchar(ctx_nulls)) paste0(", ", ctx_nulls) else ""
 
-  # Entire SQL uses single quotes for string literals; identifiers are double-quoted via .qq()
   glue::glue(
 "WITH
   ids AS (SELECT \"{id_col}\" FROM {ids_tmp}),
@@ -927,17 +923,17 @@ build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, c
     FROM o
     LEFT JOIN n USING(\"{id_col}\")
     LEFT JOIN first_seen fs USING(\"{id_col}\")
-    WHERE { .qq('n', id_col) } IS NULL
+    WHERE ", .qq("n", id_col), " IS NULL
   )
 {unions}
 UNION ALL
 SELECT '+' AS Change, 'Added' AS \"Changed Field\", {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} {diff_nulls}{ctx_news_clause},
-       DATE({ .qq('n','Query_Date') }) AS `When`, { .qq('n', id_col) } AS \"{id_col}\"
-FROM base WHERE { .qq('o', id_col) } IS NULL
+       DATE(", .qq("n","Query_Date"), ") AS `When`, ", .qq("n", id_col), " AS \"{id_col}\"
+FROM base WHERE ", .qq("o", id_col), " IS NULL
 UNION ALL
 SELECT '-' AS Change, 'Removed' AS \"Changed Field\", {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} {diff_nulls}{ctx_nulls_clause},
-       DATE({ .qq('o','Query_Date') }) AS `When`, { .qq('o', id_col) } AS \"{id_col}\"
-FROM base WHERE { .qq('n', id_col) } IS NULL
+       DATE(", .qq("o","Query_Date"), ") AS `When`, ", .qq("o", id_col), " AS \"{id_col}\"
+FROM base WHERE ", .qq("n", id_col), " IS NULL
 ORDER BY `When` DESC, \"{id_col}\";"
   )
 }
@@ -1060,6 +1056,7 @@ base::lapply(configs, function(cfg){
   })
   NULL
 })
+
 ```
 
 ```{r ServerNoChangesInLast6M, context = "server", echo = FALSE}
