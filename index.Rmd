@@ -55,48 +55,11 @@ raw_tables <- shiny::reactive({
   )
 })
 
-# ID vectors (reactive)
-nct_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]][["NCT_Ids"]]
-  if (is.null(ids)) character()
-  unique(ids[!is.na(ids) & nzchar(ids)])
-})
-isr_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]][["ISRCTN_Ids"]]
-  if (is.null(ids)) character()
-  unique(ids[!is.na(ids) & nzchar(ids)])
-})
-nihr_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]][["NIHR_Ids"]]
-  if (is.null(ids)) character()
-  # Normalize by stripping non-digits when matching downstream
-  ids <- gsub("[^0-9]", "", ids)
-  ids[nzchar(ids)]
-  unique(ids[nzchar(ids)])
-})
-eu_ids <- shiny::reactive({
-  ids <- raw_tables()[["Trial_Ids"]][["EU_Ids"]]
-  if (is.null(ids)) character()
-  unique(ids[!is.na(ids) & nzchar(ids)])
-})
-
 # Helpers
 clean_utf8 <- function(x) enc2utf8(base::as.character(x))  # minimal & vectorized
 fast_trunc <- function(x, n = 120L) {                      # UI-only truncation, cheap
   x <- base::as.character(x); i <- base::nchar(x) > n
   x[i] <- base::paste0(base::substr(x[i], 1L, n), "…"); x
-}
-latest_sql <- function(table, id_col) {
-  table_q <- .qidt(table); id_q <- .qidt(id_col)
-  sprintf('
-    SELECT *
-    FROM (
-      SELECT t.*,
-             ROW_NUMBER() OVER (PARTITION BY %s ORDER BY "Query_Date" DESC) AS rn
-      FROM %s t
-    )
-    WHERE rn = 1
-  ', id_q, table_q)
 }
 last_two_cte_sql <- function(table, id_col) {              # why: compute last two rows once; join for diffs
   glue::glue("
@@ -109,21 +72,6 @@ last_two_cte_sql <- function(table, id_col) {              # why: compute last t
     n AS (SELECT * FROM last2 WHERE rn = 1),
     o AS (SELECT * FROM last2 WHERE rn = 2)
   ")
-}
-.with_temp_ids <- function(pool, tmp_name, id_col, ids, code_fn) {
-  id_col_q <- .qidt(id_col)
-  tmp_q    <- .qidt(tmp_name)
-  DBI::dbExecute(pool, sprintf("DROP TABLE IF EXISTS %s;", tmp_q))
-  DBI::dbExecute(pool, sprintf("CREATE TEMP TABLE %s (%s TEXT PRIMARY KEY);", tmp_q, id_col_q))
-  if (length(ids)) {
-    df <- stats::setNames(base::data.frame(ids, check.names = FALSE), gsub('"','', id_col_q, fixed = TRUE))
-    DBI::dbWriteTable(pool, tmp_name, df, append = TRUE)
-  }
-  on.exit(DBI::dbExecute(pool, sprintf("DROP TABLE IF EXISTS %s;", tmp_q)), add = TRUE)
-  force(code_fn(length(ids) > 0L))
-}
-sel_front <- function(.df, front) {
-  dplyr::select(.df, dplyr::all_of(front), dplyr::everything())
 }
 
 # SQL Quoting helpers
@@ -747,39 +695,59 @@ refresh_all_data <- function() {
 
 ```{r ServerLiveTrialInfo, context = "server", echo = FALSE}
 
-# --- NCT latest (reactive data) ---
-nct_latest_df <- shiny::reactive({
-  base_sql <- latest_sql("NCT", "NCTId")
-  .with_temp_ids(pool_con, "_tmp_nct_ids", "NCTId", nct_ids(), function(has_ids) {
-    if (has_ids) {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        WITH latest AS ({base_sql})
-        SELECT Program,
-               `Guideline.number` AS Guideline,
-               DATE(Query_Date)   AS `Query Date`,
-               NCTId              AS `NCT ID`,
-               BriefTitle         AS Title,
-               OverallStatus      AS Status
-        FROM latest JOIN _tmp_nct_ids USING(NCTId)
-        ORDER BY `Query Date` DESC, `NCT ID`
-      "))
-    } else {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
-               NCTId AS `NCT ID`, BriefTitle AS Title, OverallStatus AS Status
-        FROM ({base_sql})
-        ORDER BY `Query Date` DESC, `NCT ID`
-      "))
-    }
-  })
-}) |>
-  shiny::bindCache(mtime_reader(), nct_ids()) |>
-  shiny::bindEvent(mtime_reader())
+# --- NCT “Latest” SQL builder (no temp tables; exact columns/order) ---
+nct_latest_sql_from_trial_ids <- function(con) {
+  glue::glue_sql("
+WITH
+  ids AS (
+    SELECT DISTINCT TRIM(\"NCT_Ids\") AS \"NCTId\"
+    FROM \"Trial_Ids\"
+    WHERE \"NCT_Ids\" IS NOT NULL AND TRIM(\"NCT_Ids\") <> ''
+  ),
+  base AS (
+    SELECT n.*
+    FROM \"NCT\" n
+    JOIN ids USING (\"NCTId\")
+  ),
+  latest_rank AS (
+    SELECT base.*,
+           ROW_NUMBER() OVER (PARTITION BY \"NCTId\" ORDER BY \"Query_Date\" DESC) AS rn
+    FROM base
+  ),
+  latest AS (SELECT * FROM latest_rank WHERE rn = 1),
+  first_seen AS (
+    SELECT \"NCTId\", DATE(MIN(\"Query_Date\")) AS \"Date Added\"
+    FROM base
+    GROUP BY \"NCTId\"
+  )
+SELECT
+  latest.\"Program\"                 AS \"Program\",
+  latest.\"Guideline.number\"        AS \"Guideline\",
+  first_seen.\"Date Added\"          AS \"Date Added\",
+  latest.\"URL\"                     AS \"URL\",
+  latest.\"NCTId\"                   AS \"NCT ID\",
+  latest.\"OrgStudyId\"              AS \"Org Study ID\",
+  latest.\"Condition\"               AS \"Condition\",
+  latest.\"BriefTitle\"              AS \"Title\",
+  latest.\"Acronym\"                 AS \"Acronym\",
+  latest.\"OverallStatus\"           AS \"Status\",
+  latest.\"PrimaryCompletionDate\"   AS \"Primary Completion Date\",
+  latest.\"CompletionDate\"          AS \"Completion Date\",
+  latest.\"ResultsFirstSubmitDate\"  AS \"Results Submit Date\",
+  latest.\"ResultsFirstPostDate\"    AS \"Results Post Date\",
+  latest.\"LastUpdatePostDate\"      AS \"Last Update\"
+FROM latest
+JOIN first_seen USING (\"NCTId\")
+ORDER BY \"Date Added\" DESC, \"NCT ID\";
+", .con = con)
+}
 
+# --- Execute inside renderDT (reactivity stays here) ---
 output$live_trial_table_nct <- DT::renderDT({
-  df <- nct_latest_df()
-  if (!base::nrow(df)) return(df)
-  df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
+  sql <- nct_latest_sql_from_trial_ids(pool_con)
+  df  <- DBI::dbGetQuery(pool_con, sql)
+  if (!base::nrow(df)) base::return(df)
+  df
 }, options = dt_opts_server, server = TRUE, filter = "top")
 
 ## --- ISRCTN “Latest” SQL builder (non-reactive) ---
@@ -836,85 +804,106 @@ output$live_trial_table_isrctn <- DT::renderDT({
   df
 }, options = dt_opts_server, server = TRUE, filter = "top")
 
-# --- NIHR latest (reactive data) ---
-nihr_latest_df <- shiny::reactive({
-  base_sql <- latest_sql("NIHR", "project_id")
-  .with_temp_ids(pool_con, "_tmp_nihr_ids", "project_id", nihr_ids(), function(has_ids) {
-    if (has_ids) {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        WITH latest AS ({base_sql})
-        SELECT Program,
-               `Guideline.number` AS Guideline,
-               DATE(Query_Date)   AS `Query Date`,
-               project_id         AS `NIHR ID`,
-               project_title      AS `Project Title`,
-               project_status     AS Status,
-               end_date           AS `End Date`
-        FROM latest JOIN _tmp_nihr_ids USING(project_id)
-        ORDER BY `Query Date` DESC, `NIHR ID`
-      "))
-    } else {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
-               project_id AS `NIHR ID`, project_title AS `Project Title`,
-               project_status AS Status, end_date AS `End Date`
-        FROM ({base_sql})
-        ORDER BY `Query Date` DESC, `NIHR ID`
-      "))
-    }
-  })
-}) |>
-  shiny::bindCache(mtime_reader(), nihr_ids()) |>
-  shiny::bindEvent(mtime_reader())
+# --- NIHR “Latest” SQL builder (filters via Trial_Ids; normalizes IDs) ---
+nihr_latest_sql_from_trial_ids <- function(con) {
+  glue::glue_sql("
+WITH
+  ids AS (
+    SELECT DISTINCT
+      TRIM(\"NIHR_Ids\")                              AS \"NIHR_Ids_raw\",
+      REPLACE(REPLACE(TRIM(\"NIHR_Ids\"),'-',''),'/','') AS \"id_norm\"
+    FROM \"Trial_Ids\"
+    WHERE \"NIHR_Ids\" IS NOT NULL AND TRIM(\"NIHR_Ids\") <> ''
+  ),
+  base AS (
+    SELECT n.*
+    FROM \"NIHR\" n
+    JOIN ids
+      ON REPLACE(REPLACE(n.\"project_id\",'-',''),'/','') = ids.\"id_norm\"
+  ),
+  latest_rank AS (
+    SELECT base.*,
+           ROW_NUMBER() OVER (PARTITION BY \"project_id\" ORDER BY \"Query_Date\" DESC) AS rn
+    FROM base
+  ),
+  latest AS (SELECT * FROM latest_rank WHERE rn = 1),
+  first_seen AS (
+    SELECT \"project_id\", DATE(MIN(\"Query_Date\")) AS \"Date Added\"
+    FROM base
+    GROUP BY \"project_id\"
+  )
+SELECT
+  latest.\"Program\"         AS \"Program\",
+  latest.\"Guideline.number\" AS \"Guideline\",
+  first_seen.\"Date Added\"  AS \"Date Added\",
+  latest.\"URL\"             AS \"URL\",
+  latest.\"project_id\"      AS \"NIHR ID\",
+  latest.\"project_title\"   AS \"Project Title\",
+  latest.\"project_status\"  AS \"Status\",
+  latest.\"end_date\"        AS \"End Date\"
+FROM latest
+JOIN first_seen USING (\"project_id\")
+ORDER BY \"Date Added\" DESC, \"NIHR ID\";
+", .con = con)
+}
 
+# --- Execute inside renderDT (reactivity here) ---
 output$live_trial_table_nihr <- DT::renderDT({
-  nihr_latest_df()
+  sql <- nihr_latest_sql_from_trial_ids(pool_con)
+  df  <- DBI::dbGetQuery(pool_con, sql)
+  if (!base::nrow(df)) base::return(df)
+  df
 }, options = dt_opts_server, server = TRUE, filter = "top")
 
+# --- EU “Latest” SQL builder (filter via Trial_Ids.EU_Ids; exact columns/order; no temp tables) ---
+eu_latest_sql_from_trial_ids <- function(con) {
+  glue::glue_sql("
+WITH
+  ids AS (
+    SELECT DISTINCT TRIM(\"EU_Ids\") AS \"EU_Ids\"
+    FROM \"Trial_Ids\"
+    WHERE \"EU_Ids\" IS NOT NULL AND TRIM(\"EU_Ids\") <> ''
+  ),
+  base AS (
+    SELECT e.*
+    FROM \"EU\" e
+    JOIN ids USING (\"EU_Ids\")
+  ),
+  latest_rank AS (
+    SELECT base.*,
+           ROW_NUMBER() OVER (PARTITION BY \"EU_Ids\" ORDER BY \"Query_Date\" DESC) AS rn
+    FROM base
+  ),
+  latest AS (SELECT * FROM latest_rank WHERE rn = 1),
+  first_seen AS (
+    SELECT \"EU_Ids\", DATE(MIN(\"Query_Date\")) AS \"Date Added\"
+    FROM base
+    GROUP BY \"EU_Ids\"
+  )
+SELECT
+  latest.\"Program\"                                                   AS \"Program\",
+  latest.\"Guideline.number\"                                          AS \"Guideline\",
+  first_seen.\"Date Added\"                                            AS \"Date Added\",
+  latest.\"X_id\"                                                      AS \"Clinicaltrials.eu ID\",
+  latest.\"a3_full_title_of_the_trial\"                                AS \"Title\",
+  latest.\"a32_name_or_abbreviated_title_of_the_trial_where_available\" AS \"Abbreviated Title\",
+  latest.\"p_end_of_trial_status\"                                     AS \"End of Trial Status\",
+  latest.\"a41_sponsors_protocol_code_number\"                         AS \"Sponsor ID\",
+  latest.\"URL\"                                                       AS \"URL\"
+FROM latest
+JOIN first_seen USING (\"EU_Ids\")
+ORDER BY \"Date Added\" DESC, \"Clinicaltrials.eu ID\";
+", .con = con)
+}
 
-# --- EU latest (reactive data) ---
-eu_latest_df <- shiny::reactive({
-  base_sql <- latest_sql("EU", "EU_Ids")
-  .with_temp_ids(pool_con, "_tmp_eu_ids", "EU_Ids", eu_ids(), function(has_ids) {
-    if (has_ids) {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        WITH latest AS ({base_sql})
-        SELECT Program,
-               `Guideline.number` AS Guideline,
-               DATE(Query_Date)   AS `Query Date`,
-               EU_Ids             AS `EU ID`,
-               X_id               AS `Clinicaltrials.eu ID`,
-               a3_full_title_of_the_trial AS Title,
-               a32_name_or_abbreviated_title_of_the_trial_where_available AS `Abbreviated Title`,
-               p_end_of_trial_status AS `End of Trial Status`,
-               a41_sponsors_protocol_code_number AS `Sponsor ID`,
-               URL
-        FROM latest JOIN _tmp_eu_ids USING(EU_Ids)
-        ORDER BY `Query Date` DESC, `EU ID`
-      "))
-    } else {
-      DBI::dbGetQuery(pool_con, glue::glue("
-        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
-               EU_Ids AS `EU ID`, X_id AS `Clinicaltrials.eu ID`,
-               a3_full_title_of_the_trial AS Title,
-               a32_name_or_abbreviated_title_of_the_trial_where_available AS `Abbreviated Title`,
-               p_end_of_trial_status AS `End of Trial Status`,
-               a41_sponsors_protocol_code_number AS `Sponsor ID`,
-               URL
-        FROM ({base_sql})
-        ORDER BY `Query Date` DESC, `EU ID`
-      "))
-    }
-  })
-}) |>
-  shiny::bindCache(mtime_reader(), eu_ids()) |>
-  shiny::bindEvent(mtime_reader())
-
+# --- Execute inside renderDT (reactivity here; no sel_front needed) ---
 output$live_trial_table_eu <- DT::renderDT({
-  df <- eu_latest_df()
-  if (!base::nrow(df)) return(df)
-  df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
+  sql <- eu_latest_sql_from_trial_ids(pool_con)
+  df  <- DBI::dbGetQuery(pool_con, sql)
+  if (!base::nrow(df)) base::return(df)
+  df
 }, options = dt_opts_server, server = TRUE, filter = "top")
+
 
 ```
 
