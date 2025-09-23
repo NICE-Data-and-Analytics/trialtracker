@@ -10,131 +10,152 @@ output:
 runtime: shiny
 ---
 
-```{r setup, context = "server", echo=FALSE, include=FALSE}
+```{r setup, context="server", echo=FALSE, include=FALSE}
 
-# Cached loads for all tables (refresh when the SQLite file's mtime changes)
-db_path  <- base::file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
+# DB path
+db_path <- base::file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
+
+# Pool connection (more robust than 'plain' DBI)
 pool_con <- pool::dbPool(RSQLite::SQLite(), dbname = db_path)
 shiny::onStop(function() pool::poolClose(pool_con))
 
-# (Optional, safe reads – uncomment later in Stage 6)
+# PRAGMAs for db performance (might be overkill)
 DBI::dbExecute(pool_con, "PRAGMA journal_mode=WAL;")
 DBI::dbExecute(pool_con, "PRAGMA synchronous=NORMAL;")
 DBI::dbExecute(pool_con, "PRAGMA temp_store=MEMORY;")
 DBI::dbExecute(pool_con, "PRAGMA mmap_size=134217728;")
 
+# Refresh reactive (replaces last_refreshed + observe/invalidateLater) ----
 mtime_reader <- shiny::reactiveFileReader(
   intervalMillis = 3000L,
   session        = shiny::getDefaultReactiveDomain(),
   filePath       = db_path,
   readFunc       = function(path) base::file.info(path)$mtime
 )
-invalidate_cache <- function() { base::invisible(mtime_reader()) }  # call right after add/remove/archive
 
-# Read once per mtime tick; reuse everywhere
+# Function to update UI after add/remove/archive
+invalidate_cache <- function() { base::invisible(mtime_reader()) }
+
+# Regex patterns
+NCT_pattern    <- "^NCT[0-9]{8}$"
+EU_pattern     <- "^[0-9]{4}-[0-9]{6}-[0-9]{2}$"
+ISRCTN_pattern <- "^ISRCTN[0-9]{8}$"
+NIHR_pattern   <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})"
+
+# Cached PM tables (small enough not to need other solution)
 raw_tables <- shiny::reactive({
   mtime_reader()
   tbls <- DBI::dbListTables(pool_con)
-  list(
-    NCT       = if ("NCT"       %in% tbls) DBI::dbReadTable(pool_con, "NCT") else base::data.frame(),
-    ISRCTN    = if ("ISRCTN"    %in% tbls) DBI::dbReadTable(pool_con, "ISRCTN") else base::data.frame(),
-    EU        = if ("EU"        %in% tbls) DBI::dbReadTable(pool_con, "EU") else base::data.frame(),
-    NIHR      = if ("NIHR"      %in% tbls) DBI::dbReadTable(pool_con, "NIHR") else base::data.frame(),
+  base::list(
     Trial_Ids = if ("Trial_Ids" %in% tbls) DBI::dbReadTable(pool_con, "Trial_Ids") else base::data.frame(),
-    NCT_PM    = if ("NCT_PM"     %in% tbls) DBI::dbReadTable(pool_con, "NCT_PM")     else base::data.frame(),
-    ISRCTN_PM = if ("ISRCTN_PM"  %in% tbls) DBI::dbReadTable(pool_con, "ISRCTN_PM")  else base::data.frame(),
-    NIHR_PM   = if ("NIHR_PM"    %in% tbls) DBI::dbReadTable(pool_con, "NIHR_PM")    else base::data.frame(),
-    EU_PM     = if ("EU_PM"      %in% tbls) DBI::dbReadTable(pool_con, "EU_PM")      else base::data.frame()
+    NCT_PM    = if ("NCT_PM"    %in% tbls) DBI::dbReadTable(pool_con, "NCT_PM")    else base::data.frame(),
+    ISRCTN_PM = if ("ISRCTN_PM" %in% tbls) DBI::dbReadTable(pool_con, "ISRCTN_PM") else base::data.frame(),
+    NIHR_PM   = if ("NIHR_PM"   %in% tbls) DBI::dbReadTable(pool_con, "NIHR_PM")   else base::data.frame(),
+    EU_PM     = if ("EU_PM"     %in% tbls) DBI::dbReadTable(pool_con, "EU_PM")     else base::data.frame()
   )
-}) |> shiny::bindCache(mtime_reader())
-
-# Small utils
-fast_trunc <- function(x, n = 120L) { x <- base::as.character(x); i <- base::nchar(x) > n; x[i] <- base::paste0(base::substr(x[i],1L,n),"…"); x }
-latest_by_id <- function(df, id_col, date_col = "Query_Date") {
-  if (!base::nrow(df)) return(df)
-  # Works even if Query_Date is integer/char; we coerce to Date safely
-  df |>
-    dplyr::mutate(
-      !!date_col := base::suppressWarnings(base::as.Date(.data[[date_col]]))
-    ) |>
-    dplyr::group_by(.data[[id_col]]) |>
-    dplyr::slice_max(order_by = .data[[date_col]], n = 1, with_ties = FALSE) |>
-    dplyr::ungroup()
-}
-
-# Standard DT options: server-side + paging (no nested scrolling)
-dt_opts_server <- base::list(
-  pageLength  = 50L,
-  lengthMenu  = c(25L, 50L, 100L),
-  deferRender = TRUE,
-  searchDelay = 300L,
-  dom         = "tip"
-)
-
-## OLD SETUP CHUNK FROM HERE
-
-#db_path <- base::file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
-main_con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
-trial_id_df <- DBI::dbReadTable(main_con, "Trial_Ids")
-
-# Store the db's modified time (POSIXct)
-last_refreshed <- reactiveVal({
-  if (file.exists(db_path)) file.info(db_path)$mtime
-  else as.POSIXct(NA_real_, origin = "1970-01-01", tz = "UTC")
 })
 
-# Poll the DB file periodically and refresh the reactive timestamp
-observe({
-  invalidateLater(10 * 1000, session)  # every 10s; tie timer to the session
-  if (file.exists(db_path)) {
-    new_ts <- file.info(db_path)$mtime
-    # Only update if it actually changed (avoids unnecessary reactivity)
-    if (!identical(new_ts, last_refreshed())) last_refreshed(new_ts)
+# ID vectors
+nct_ids <- shiny::reactive({
+  ids <- raw_tables()[["Trial_Ids"]]
+  if (!"NCT_Ids" %in% base::names(ids)) base::character()
+  else ids$NCT_Ids |> base::na.omit() |> base::unique()
+})
+isr_ids <- shiny::reactive({
+  ids <- raw_tables()[["Trial_Ids"]]
+  if (!"ISRCTN_Ids" %in% base::names(ids)) base::character()
+  else ids$ISRCTN_Ids |> base::na.omit() |> base::unique()
+})
+eu_ids <- shiny::reactive({
+  ids <- raw_tables()[["Trial_Ids"]]
+  if (!"EU_Ids" %in% base::names(ids)) base::character()
+  else ids$EU_Ids |> base::na.omit() |> base::unique()
+})
+nihr_ids <- shiny::reactive({
+  ids <- raw_tables()[["Trial_Ids"]]
+  if (!"NIHR_Ids" %in% base::names(ids)) base::character()
+  else ids$NIHR_Ids |> base::na.omit() |> base::unique()
+})
+
+# Helpers
+clean_utf8 <- function(x) enc2utf8(base::as.character(x))  # minimal & vectorized
+
+fast_trunc <- function(x, n = 120L) {                      # UI-only truncation, cheap
+  x <- base::as.character(x); i <- base::nchar(x) > n
+  x[i] <- base::paste0(base::substr(x[i], 1L, n), "…"); x
+}
+
+latest_sql <- function(table, id_col) {                    # why: “latest per ID” in SQL (fast, no R copies)
+  glue::glue("
+    SELECT * FROM (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (PARTITION BY {id_col} ORDER BY Query_Date DESC) AS rn
+      FROM {table}
+    ) WHERE rn = 1
+  ")
+}
+
+last_two_cte_sql <- function(table, id_col) {              # why: compute last two rows once; join for diffs
+  glue::glue("
+    last2 AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (PARTITION BY {id_col} ORDER BY Query_Date DESC) AS rn
+      FROM {table}
+    ),
+    n AS (SELECT * FROM last2 WHERE rn = 1),
+    o AS (SELECT * FROM last2 WHERE rn = 2)
+  ")
+}
+
+.with_temp_ids <- function(con, tmp_name, col_name, values, code) {
+  if (!base::length(values)) base::return(code(FALSE))
+  DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp_name};"))
+  DBI::dbExecute(con, glue::glue("CREATE TEMP TABLE {tmp_name} ({col_name} TEXT PRIMARY KEY);"))
+  step <- 10000L; n <- base::length(values)
+  for (s in base::seq(1L, n, by = step)) {
+    e <- base::min(s + step - 1L, n)
+    DBI::dbWriteTable(
+      con, tmp_name,
+      stats::setNames(base::data.frame(values[s:e], check.names = FALSE), col_name),
+      append = TRUE
+    )
   }
-})
-
-# Regex patterns
-NCT_pattern <- "^NCT[0-9]{8}$"
-EU_pattern <- "^[0-9]{4}-[0-9]{6}-[0-9]{2}$"
-ISRCTN_pattern <- "^ISRCTN[0-9]{8}$"
-NIHR_pattern <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})"
-
-# Helper functions (non-reactive and used for rendering UI)
-
-# Clean UTF function
-clean_utf8 <- function(x){
-  iconv(x, "UTF-8", "UTF-8", sub = "")
+  on.exit(DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp_name};")), add = TRUE)
+  code(TRUE)
 }
 
-# Render pubmed function
-render_pubmed_table <- function(table_name) {
-  if (!table_name %in% DBI::dbListTables(main_con)) return(NULL)
-
-  DBI::dbReadTable(main_con, table_name) |>
-    dplyr::mutate(across(everything(), .fns = clean_utf8)) |>
+# PubMed: return a data.frame (NOT a DT widget); render with renderDT(server = FALSE)
+pubmed_df <- function(df) {
+  if (!base::nrow(df)) return(df)
+  df |>
+    dplyr::mutate(across(where(is.character), clean_utf8)) |>
     dplyr::mutate(
-      Query_Date = format(as.Date(as.numeric(Query_Date), origin = "1970-01-01"), "%Y/%m/%d"),
-      abstract = stringr::str_trunc(abstract, 200L)
+      Query_Date   = base::suppressWarnings(base::as.Date(.data[["Query_Date"]])),
+      `Query Date` = base::format(.data[["Query_Date"]], "%Y/%m/%d"),
+      Abstract     = fast_trunc(.data[["abstract"]], 200L)
     ) |>
     dplyr::rename(
-      `Query Date` = Query_Date,
-      `Trial ID` = ID,
-      `Publication DOI` = doi,
-      Title = title,
-      Abstract = abstract,
-      Journal = jabbrv,
-      Condition = `Short..working.title.`,
-      Guideline = Guideline.number
+      Guideline = .data[["Guideline.number"]],
+      `Trial ID`= .data[["ID"]],
+      `Publication DOI` = .data[["doi"]],
+      Title     = .data[["title"]],
+      Journal   = .data[["jabbrv"]],
+      Condition = .data[["Short..working.title."]]
     ) |>
     dplyr::select(
-      Program, Guideline, `Query Date`, `Trial ID`, pmid,
-      `Publication DOI`, Title, Abstract, Journal, Condition
+      .data[["Program"]], .data[["Guideline"]], .data[["Query Date"]],
+      .data[["Trial ID"]], .data[["pmid"]], .data[["Publication DOI"]],
+      .data[["Title"]], .data[["Abstract"]], .data[["Journal"]], .data[["Condition"]]
     ) |>
-    dplyr::distinct() |>
-    dplyr::arrange(dplyr::desc(`Query Date`)) |>
-    DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+    dplyr::distinct()
 }
 
+# DT options (server for big tables; client for smaller PubMed tables)
+dt_opts_server <- base::list(pageLength = 50L, lengthMenu = c(25L, 50L, 100L), deferRender = TRUE, searchDelay = 300L, dom = "tip")
+dt_opts_client <- base::list(pageLength = 25L, dom = "tip")
+  
 ```
 
 ```{css, echo=FALSE}
@@ -590,24 +611,13 @@ DBI::dbReadTable(main_con, "EU_rxv") |>
 
 ```{r ServerCodeUpdates , context = "server"}
 
-# Inititalise reactive vals for live trial info tables
-nct_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NCT"))
-isrctn_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "ISRCTN"))
-eu_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "EU"))
-nihr_data <- shiny::reactiveVal(DBI::dbReadTable(main_con, "NIHR"))
-
 # Helper to render a "last refreshed" string into a given output ID
 render_last_refreshed <- function(id) {
   output[[id]] <- shiny::renderText({
-    ts <- last_refreshed()
-    if (is.null(ts) || is.na(ts)) return("Unknown")
-
-    # Display in UK local time (BST/GMT) and UTC
-    utc <- format(ts, "%Y-%m-%d %H:%M",       tz = "UTC")
-
-    paste0("🔄 Last refreshed at: ",
-           utc,
-           " UTC)")
+    ts <- mtime_reader()
+    if (base::is.na(ts)) return("Unknown")
+    utc <- base::format(ts, "%Y-%m-%d %H:%M", tz = "UTC")
+    paste0("🔄 Last refreshed at: ", utc, " UTC")
   })
 }
 
@@ -623,290 +633,378 @@ refresh_all_data <- function() {
   #Call Update Script
   trialtracker::download_trial_info_wrapper_no_pm_or_email()
 
-  #Update reactives with new sqlite tables
-  nct_data(DBI::dbReadTable(main_con, "NCT"))
-  isrctn_data(DBI::dbReadTable(main_con, "ISRCTN"))
-  eu_data(DBI::dbReadTable(main_con, "EU"))
-  nihr_data(DBI::dbReadTable(main_con, "NIHR"))
-
-  last_refreshed(file.info(db_path)$mtime)
+  # UI to see the new mtime
+  invalidate_cache()
 }
 
 
 ```
 
-```{r ServerLiveTrialInfo , context = "server"}
+```{r ServerLiveTrialInfo , context = "server", echo = FALSE}
 
-# Shared helper for rendering livetrialinfos
-render_live_trial_table <- function(data, id_col, ids, rename_list, reorder_cols = NULL, extra_mutate = NULL, extra_filter = NULL) {
-  data_filtered <- if (is.function(extra_filter)) extra_filter(data) else data
-
-  date_added_df <- data_filtered |>
-    dplyr::summarise(`Date Added` = lubridate::as_date(min(Query_Date - 1L)), .by = {{ id_col }})
-
-  processed <- data_filtered |>
-    dplyr::filter({{ id_col }} %in% ids) |>
-    dplyr::left_join(date_added_df, by = rlang::as_string(rlang::ensym(id_col))) |>
-    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE) |>
-    dplyr::select(-Query_Date) |>
-    dplyr::mutate(across(.cols = everything(), .fns = clean_utf8))
-
-  if (is.function(extra_mutate)) processed <- extra_mutate(processed)
-
-  processed <- processed |>
-    dplyr::rename(!!!rename_list)
-
-  if (!is.null(reorder_cols)) {
-    processed <- processed |>
-      dplyr::select(dplyr::all_of(reorder_cols))
-  }
-
-  processed |>
-    dplyr::arrange(desc(`Date Added`)) |>
-    dplyr::distinct()
-}
-
-# Live trial status tables
+# ClinicalTrials.gov — Latest
 output$live_trial_table_nct <- DT::renderDT({
-
-  nct <- raw_tables()[["NCT"]]
-  if (!base::nrow(nct)) base::return(base::data.frame())
-
-  # Compute latest row per NCTId once (cheap in R for first step)
-  latest <- latest_by_id(nct, id_col = "NCTId", date_col = "Query_Date")
-
-  latest |>
-    dplyr::transmute(
-      Program             = .data[["Program"]],
-      Guideline           = .data[["Guideline.number"]],
-      `Query Date`        = base::format(base::suppressWarnings(base::as.Date(.data[["Query_Date"]])), "%Y-%m-%d"),
-      `NCT ID`            = .data[["NCTId"]],
-      Title               = fast_trunc(.data[["BriefTitle"]], 120L),
-      Status              = .data[["OverallStatus"]]
-    )
+  base_sql <- latest_sql("NCT", "NCTId")
+  df <- .with_temp_ids(pool_con, "_tmp_nct_ids", "NCTId", nct_ids(), function(has_ids) {
+    if (has_ids) {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        WITH latest AS ({base_sql})
+        SELECT Program,
+               `Guideline.number` AS Guideline,
+               DATE(Query_Date)   AS `Query Date`,
+               NCTId              AS `NCT ID`,
+               BriefTitle         AS Title,
+               OverallStatus      AS Status
+        FROM latest JOIN _tmp_nct_ids USING(NCTId)
+        ORDER BY `Query Date` DESC, `NCT ID`
+      "))
+    } else {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
+               NCTId AS `NCT ID`, BriefTitle AS Title, OverallStatus AS Status
+        FROM ({base_sql})
+        ORDER BY `Query Date` DESC, `NCT ID`
+      "))
+    }
+  })
+  if (!base::nrow(df)) base::return(df)
+  df |>
+    dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
 }, options = dt_opts_server, server = TRUE, filter = "top") |>
-  shiny::bindCache(mtime_reader()) |>
+  shiny::bindCache(mtime_reader(), nct_ids()) |>
   shiny::bindEvent(mtime_reader())
 
+# ISRCTN — Latest
 output$live_trial_table_isrctn <- DT::renderDT({
-  
-  req(main_con, trial_id_df, isrctn_data())
-
-  render_live_trial_table(
-    data = isrctn_data(),
-    id_col = ISRCTN_No,
-    ids = trial_id_df$ISRCTN_Ids,
-    rename_list = c(
-      Guideline = "Guideline.number",
-      `ISRCTN ID` = "ISRCTN_No",
-      Title = "Public_Title",
-      `Scientific Title` = "Scientific_Title",
-      `Recruitment Status` = "Recruitment_Status",
-      `Results URL` = "Results_url_link",
-      `Results summary` = "Results_summary"
-    ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "URL", "ISRCTN ID", "Title", "Acronym",
-                     "Scientific Title", "Recruitment Status", "Results URL", "Results summary",
-                     "Results_date_completed", "Results_date_posted", "Results_date_first_publication"),
-    extra_mutate = ~ dplyr::mutate(.,
-      `Results_date_completed` = lubridate::dmy(Results_date_completed),
-      `Results_date_posted` = lubridate::dmy(Results_date_posted),
-      `Results_date_first_publication` = lubridate::dmy(Results_date_first_publication)
+  base_sql <- latest_sql("ISRCTN", "ISRCTN")
+  df <- .with_temp_ids(pool_con, "_tmp_isr_ids", "ISRCTN", isr_ids(), function(has_ids) {
+    if (has_ids) {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        WITH latest AS ({base_sql})
+        SELECT Program,
+               `Guideline.number` AS Guideline,
+               DATE(Query_Date)   AS `Query Date`,
+               ISRCTN             AS `ISRCTN`,
+               primary_title      AS Title,
+               registration_status AS `Recruitment Status`,
+               Results_url_link    AS `Results URL`,
+               Results_summary     AS `Results summary`,
+               Results_date_completed AS `Results_date_completed`,
+               Results_date_posted    AS `Results_date_posted`,
+               Results_date_first_publication AS `Results_date_first_publication`,
+               URL
+        FROM latest JOIN _tmp_isr_ids USING(ISRCTN)
+        ORDER BY `Query Date` DESC, `ISRCTN`
+      "))
+    } else {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
+               ISRCTN AS `ISRCTN`, primary_title AS Title, registration_status AS `Recruitment Status`,
+               Results_url_link AS `Results URL`, Results_summary AS `Results summary`,
+               Results_date_completed, Results_date_posted, Results_date_first_publication, URL
+        FROM ({base_sql})
+        ORDER BY `Query Date` DESC, `ISRCTN`
+      "))
+    }
+  })
+  if (!base::nrow(df)) base::return(df)
+  df |>
+    dplyr::mutate(
+      Title = fast_trunc(.data[["Title"]], 120L),
+      `Results_date_completed`       = lubridate::dmy(.data[["Results_date_completed"]]),
+      `Results_date_posted`          = lubridate::dmy(.data[["Results_date_posted"]]),
+      `Results_date_first_publication`= lubridate::dmy(.data[["Results_date_first_publication"]])
+    ) |>
+    dplyr::select(
+      .data[["Program"]], .data[["Guideline"]], .data[["Query Date"]], .data[["URL"]],
+      .data[["ISRCTN"]], .data[["Title"]], dplyr::everything()
     )
-  )
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+}, options = dt_opts_server, server = TRUE, filter = "top") |>
+  shiny::bindCache(mtime_reader(), isr_ids()) |>
+  shiny::bindEvent(mtime_reader())
+
+# NIHR — Latest
 output$live_trial_table_nihr <- DT::renderDT({
-  
-  req(main_con, trial_id_df, nihr_data())
+  base_sql <- latest_sql("NIHR", "project_id")
+  df <- .with_temp_ids(pool_con, "_tmp_nihr_ids", "project_id", nihr_ids(), function(has_ids) {
+    if (has_ids) {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        WITH latest AS ({base_sql})
+        SELECT Program,
+               `Guideline.number` AS Guideline,
+               DATE(Query_Date)   AS `Query Date`,
+               project_id         AS `NIHR ID`,
+               project_title      AS `Project Title`,
+               project_status     AS Status,
+               end_date           AS `End Date`
+        FROM latest JOIN _tmp_nihr_ids USING(project_id)
+        ORDER BY `Query Date` DESC, `NIHR ID`
+      "))
+    } else {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
+               project_id AS `NIHR ID`, project_title AS `Project Title`,
+               project_status AS Status, end_date AS `End Date`
+        FROM ({base_sql})
+        ORDER BY `Query Date` DESC, `NIHR ID`
+      "))
+    }
+  })
+  if (!base::nrow(df)) base::return(df)
+  df
+}, options = dt_opts_server, server = TRUE, filter = "top") |>
+  shiny::bindCache(mtime_reader(), nihr_ids()) |>
+  shiny::bindEvent(mtime_reader())
 
-  render_live_trial_table(
-    data = nihr_data(),
-    id_col = project_id,
-    ids = trial_id_df$NIHR_Ids,
-    rename_list = c(
-      Guideline = "Guideline.number",
-      `NIHR ID` = "project_id",
-      `Project Title` = "project_title",
-      Status = "project_status",
-      `End Date` = "end_date"
-    ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "NIHR ID", "Project Title", "Status", "End Date"),
-    extra_filter = ~ dplyr::mutate(., project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")) |>
-                   dplyr::filter(project_id_filter %in% stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")) |>
-                   dplyr::select(-project_id_filter)
-  )
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+# Clinicaltrials.eu — Latest
 output$live_trial_table_eu <- DT::renderDT({
-  
-  req(main_con, trial_id_df, eu_data())
+  base_sql <- latest_sql("EU", "EU_Ids")
+  df <- .with_temp_ids(pool_con, "_tmp_eu_ids", "EU_Ids", eu_ids(), function(has_ids) {
+    if (has_ids) {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        WITH latest AS ({base_sql})
+        SELECT Program,
+               `Guideline.number` AS Guideline,
+               DATE(Query_Date)   AS `Query Date`,
+               EU_Ids             AS `EU ID`,
+               X_id               AS `Clinicaltrials.eu ID`,
+               a3_full_title_of_the_trial AS Title,
+               a32_name_or_abbreviated_title_of_the_trial_where_available AS `Abbreviated Title`,
+               p_end_of_trial_status AS `End of Trial Status`,
+               a41_sponsors_protocol_code_number AS `Sponsor ID`,
+               URL
+        FROM latest JOIN _tmp_eu_ids USING(EU_Ids)
+        ORDER BY `Query Date` DESC, `EU ID`
+      "))
+    } else {
+      DBI::dbGetQuery(pool_con, glue::glue("
+        SELECT Program, `Guideline.number` AS Guideline, DATE(Query_Date) AS `Query Date`,
+               EU_Ids AS `EU ID`, X_id AS `Clinicaltrials.eu ID`,
+               a3_full_title_of_the_trial AS Title,
+               a32_name_or_abbreviated_title_of_the_trial_where_available AS `Abbreviated Title`,
+               p_end_of_trial_status AS `End of Trial Status`,
+               a41_sponsors_protocol_code_number AS `Sponsor ID`,
+               URL
+        FROM ({base_sql})
+        ORDER BY `Query Date` DESC, `EU ID`
+      "))
+    }
+  })
+  if (!base::nrow(df)) base::return(df)
+  df |>
+    dplyr::mutate(Title = fast_trunc(.data[["Title"]], 120L))
+}, options = dt_opts_server, server = TRUE, filter = "top") |>
+  shiny::bindCache(mtime_reader(), eu_ids()) |>
+  shiny::bindEvent(mtime_reader())
 
-  render_live_trial_table(
-    data = eu_data(),
-    id_col = EU_Ids,
-    ids = trial_id_df$EU_Ids,
-    rename_list = c(
-      Guideline = "Guideline.number",
-      `Clinicaltrials.eu ID` = "X_id",
-      `End of Trial Status` = "p_end_of_trial_status",
-      Title = "a3_full_title_of_the_trial",
-      `Abbreviated Title` = "a32_name_or_abbreviated_title_of_the_trial_where_available",
-      `Sponsor ID` = "a41_sponsors_protocol_code_number"
-    ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "Clinicaltrials.eu ID", "Title",
-                     "Abbreviated Title", "End of Trial Status", "Sponsor ID"),
-    extra_filter = ~ dplyr::mutate(., short_id = stringr::str_sub(X_id, 1L, 14L)) |>
-                   dplyr::filter(short_id %in% trial_id_df$EU_Ids) |>
-                   dplyr::select(-short_id, -a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids)
-  )
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
-```{r ServerRecentStatusChanges , context = "server"}
+```{r ServerRecentStatusChanges, context="server", echo=FALSE}
+# ---- DRY "+/-" diff engine (pure SQL) with "Changed Field" ----
+build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date, ids_tmp) {
+  labels_sql <- base::paste(sprintf("COALESCE(n.%1$s,o.%1$s) AS %1$s", label_cols), collapse=",\n           ")
 
-# Variable for cutoff date (31 days)
-cutoff_date <- Sys.Date() - 31L
+  meta_part <- function(nm, out) {
+    if (base::is.null(meta[[nm]])) sprintf("NULL AS %s,", out)
+    else sprintf("COALESCE(n.%1$s,o.%1$s) AS %2$s,", meta[[nm]], out)
+  }
+  meta_url   <- meta_part("url","URL")
+  meta_acr   <- meta_part("acronym","Acronym")
+  meta_title <- meta_part("title","Title")
+  meta_cond  <- meta_part("condition","Condition")
 
-# Helper function to generate old and new dfs for changes
-get_new_old_df <- function(data, id_col, ids) {
-  new_df <- data |>
-    dplyr::filter({{ id_col }} %in% ids) |>
-    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
+  ctx_select <- function(side="n") {
+    if (!base::length(ctx_map)) return("")
+    base::paste(vapply(base::seq_along(ctx_map), function(i)
+      sprintf("%s.%s AS \"%s\"", side, base::names(ctx_map)[i], base::unname(ctx_map)[i]),
+      character(1)), collapse=",\n           ")
+  }
 
-  old_df <- data |>
-    dplyr::filter(Query_Date <= cutoff_date, {{ id_col }} %in% ids) |>
-    dplyr::slice_max(Query_Date, n = 1L, with_ties = TRUE)
+  diff_select_for <- function(side, which_src) {
+    base::paste(vapply(base::seq_along(diff_map), function(i) {
+      src <- base::names(diff_map)[i]; alias <- base::unname(diff_map)[i]
+      if (base::identical(src, which_src)) sprintf("%s.%s AS \"%s\"", side, src, alias)
+      else                                 sprintf("NULL AS \"%s\"", alias)
+    }, character(1)), collapse=",\n           ")
+  }
 
-  list(new = new_df, old = old_df)
+  unions <- base::paste(vapply(base::names(diff_map), function(src) {
+    alias <- diff_map[[src]]
+    base::paste0(
+      "SELECT ' + ' AS Change, '", alias, "' AS \"Changed Field\", ", labels_sql, ",\n",
+      "       ", meta_url, "\n       ", meta_acr, "\n       ", meta_title, "\n       ", meta_cond, "\n",
+      "       ", diff_select_for("n", src),
+      if (base::length(ctx_map)) base::paste0(",\n       ", ctx_select("n")) else "",
+      ",\n       DATE(n.Query_Date) AS `When`, COALESCE(n.", id_col, ", o.", id_col, ") AS `", id_col, "`\n",
+      "FROM base WHERE (n.", src, " IS NOT o.", src, ")\nUNION ALL\n",
+      "SELECT ' - ' AS Change, '", alias, "' AS \"Changed Field\", ", labels_sql, ",\n",
+      "       ", meta_url, "\n       ", meta_acr, "\n       ", meta_title, "\n       ", meta_cond, "\n",
+      "       ", diff_select_for("o", src),
+      if (base::length(ctx_map)) base::paste0(",\n       ", ctx_select("n")) else "",
+      ",\n       DATE(o.Query_Date) AS `When`, COALESCE(n.", id_col, ", o.", id_col, ") AS `", id_col, "`\n",
+      "FROM base WHERE (n.", src, " IS NOT o.", src, ")"
+    )
+  }, character(1)), collapse="\nUNION ALL\n")
+
+  ctx_nulls <- if (base::length(ctx_map)) base::paste(base::rep("NULL", base::length(ctx_map)), collapse=", ") else ""
+  ctx_news  <- ctx_select("n")
+  diff_nulls<- base::paste(base::rep("NULL", base::length(diff_map)), collapse=", ")
+
+  # PRECOMPUTE the conditional clauses to avoid nested quotes inside glue
+  ctx_news_clause  <- if (base::nzchar(ctx_news))  base::paste0(", ", ctx_news) else ""
+  ctx_nulls_clause <- if (base::nzchar(ctx_nulls)) base::paste0(", ", ctx_nulls) else ""
+
+  glue::glue("
+WITH
+  ids AS (SELECT {id_col} FROM {ids_tmp}),
+  n_rank AS (
+    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY {id_col} ORDER BY Query_Date DESC) rn
+    FROM {table} t JOIN ids USING({id_col})
+  ),
+  n AS (SELECT * FROM n_rank WHERE rn = 1),
+  o_rank AS (
+    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY {id_col} ORDER BY Query_Date DESC) rn
+    FROM {table} t JOIN ids USING({id_col})
+    WHERE DATE(t.Query_Date) <= DATE('{cutoff_date}')
+  ),
+  o AS (SELECT * FROM o_rank WHERE rn = 1),
+  base AS (
+    SELECT {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} n.*, o.*
+    FROM n LEFT JOIN o USING({id_col})
+    UNION ALL
+    SELECT {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} n.*, o.*
+    FROM o LEFT JOIN n USING({id_col})
+    WHERE n.{id_col} IS NULL
+  )
+{unions}
+UNION ALL
+SELECT ' + ' AS Change, 'Added' AS \"Changed Field\", {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} {diff_nulls}{ctx_news_clause},
+       DATE(n.Query_Date) AS `When`, n.{id_col} AS `{id_col}`
+FROM base WHERE o.{id_col} IS NULL
+UNION ALL
+SELECT ' - ' AS Change, 'Removed' AS \"Changed Field\", {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} {diff_nulls}{ctx_nulls_clause},
+       DATE(o.Query_Date) AS `When`, o.{id_col} AS `{id_col}`
+FROM base WHERE n.{id_col} IS NULL
+ORDER BY `When` DESC, `{id_col}`;
+")
 }
 
-# Recent Status Changes Tables
-output$nct_monthly_change <- DT::renderDT({
-  
-  req(main_con, trial_id_df, nct_data())
+run_diff <- function(cfg, ids, cutoff_date) {
+  if (!base::length(ids)) return(base::data.frame())
+  tmp <- base::paste0("_tmp_ids_", cfg$id_col, "_", base::as.integer(stats::runif(1, 1e6, 9e6)))
+  DBI::dbExecute(pool_con, glue::glue("DROP TABLE IF EXISTS {tmp};"))
+  DBI::dbExecute(pool_con, glue::glue("CREATE TEMP TABLE {tmp} ({cfg$id_col} TEXT PRIMARY KEY);"))
+  DBI::dbWriteTable(pool_con, tmp, stats::setNames(base::data.frame(ids, check.names = FALSE), cfg$id_col), append = TRUE)
+  on.exit(DBI::dbExecute(pool_con, glue::glue("DROP TABLE IF EXISTS {tmp};")), add = TRUE)
+  sql <- build_diff_sql(cfg$table, cfg$id_col, cfg$label_cols, cfg$meta, cfg$diff_map, cfg$ctx_map, cutoff_date, tmp)
+  DBI::dbGetQuery(pool_con, sql)
+}
 
-  dfs <- get_new_old_df(nct_data(), NCTId, trial_id_df$NCT_Ids)
+# ---- Registry configs (unchanged except final_cols now include "Changed Field") ----
+cutoff_date <- base::Sys.Date() - 31L
 
-  compareDF::compare_df(
-    dfs$new,
-    dfs$old,
-    group_col = c("Guideline.number", "NCTId"),
-    exclude = c("Query_Date", "Condition", "BriefTitle", "Acronym", "PrimaryCompletionDate", "ResultsFirstSubmitDate", "SeeAlsoLinkURL"),
-    stop_on_error = FALSE
-  )$comparison_df |>
-    dplyr::left_join(dfs$new |> dplyr::select(BriefTitle, Program, Guideline.number, URL, NCTId, Condition, ResultsFirstSubmitDate, Acronym),
-                     by = c("Program", "Guideline.number", "URL", "NCTId")) |>
-    dplyr::mutate(
-      URL2 = paste0("https://clinicaltrials.gov/ct2/show/", NCTId),
-      Title = stringr::str_trunc(BriefTitle, 80L),
-      Condition = stringr::str_trunc(Condition, 30L)
-    ) |>
-    dplyr::mutate(across(everything(), .fns = clean_utf8)) |>
-    dplyr::mutate(across(c(CompletionDate:LastUpdatePostDate),
-                         ~ lubridate::as_date(lubridate::parse_date_time(.x, c("ymd", "bdy"), truncated = 1L)))) |>
-    dplyr::select(Change = chng_type, Program, Guideline = Guideline.number, URL = URL2, Acronym, Title, Condition,
-                  Status = OverallStatus, `Completion Date` = CompletionDate,
-                  `Results Submit Date` = ResultsFirstSubmitDate,
-                  `Last Update Date` = LastUpdatePostDate) |>
-    dplyr::distinct()
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-output$isrctn_monthly_change <- DT::renderDT({
-  
-  req(main_con, trial_id_df, isrctn_data())
-
-  dfs <- get_new_old_df(isrctn_data(), ISRCTN_No, trial_id_df$ISRCTN_Ids)
-
-  compareDF::compare_df(
-    dfs$new,
-    dfs$old,
-    group_col = c("Guideline.number", "ISRCTN_No"),
-    exclude = c("Query_Date"),
-    stop_on_error = FALSE
-  )$comparison_df |>
-    dplyr::left_join(dfs$new) |>
-    dplyr::mutate(
-      Title = stringr::str_trunc(Scientific_Title, 75L),
-      across(everything(), .fns = clean_utf8),
-      Results_date_completed = lubridate::dmy(Results_date_completed),
-      Results_date_posted = lubridate::dmy(Results_date_posted),
-      Results_date_first_publication = lubridate::dmy(Results_date_first_publication)
-    ) |>
-    dplyr::select(Change = chng_type, Program, Guideline = Guideline.number, URL, Acronym, Title,
-                  Status = Recruitment_Status, `Results URL` = Results_url_link, `Results Summary` = Results_summary,
-                  `Results Completed` = Results_date_completed, `Results Posted` = Results_date_posted,
-                  `Results Published` = Results_date_first_publication) |>
-    dplyr::distinct()
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-output$nihr_monthly_change <- DT::renderDT({
-  
-  req(main_con, trial_id_df, nihr_data())
-
-  trial_ids <- stringr::str_replace_all(trial_id_df$NIHR_Ids, "[^\\d]", "")
-
-  dfs <- get_new_old_df(
-    nihr_data() |> dplyr::mutate(project_id_filter = stringr::str_replace_all(project_id, "[^\\d]", "")),
-    project_id_filter,
-    trial_ids
+configs <- list(
+  list( # NCT
+    output_id  = "nct_monthly_change",
+    table      = "NCT",
+    id_col     = "NCTId",
+    id_label   = "NCT ID",
+    label_cols = c("Program","`Guideline.number`"),
+    meta       = list(url="URL", acronym="Acronym", title="BriefTitle", condition="Condition"),
+    diff_map   = c(OverallStatus="Status", CompletionDate="Completion Date", LastUpdatePostDate="Last Update Date"),
+    ctx_map    = c(ResultsFirstSubmitDate="Results Submit Date"),
+    ids_get    = nct_ids,
+    post_mutate= function(df, id_col){
+      df |>
+        dplyr::mutate(
+          URL = base::paste0("https://clinicaltrials.gov/ct2/show/", .data[[id_col]]),
+          Title = fast_trunc(.data[["Title"]], 80L),
+          Condition = fast_trunc(.data[["Condition"]], 30L),
+          `Completion Date`     = base::suppressWarnings(lubridate::as_date(lubridate::parse_date_time(`Completion Date`,     c("ymd","bdy"), truncated = 1))),
+          `Results Submit Date` = base::suppressWarnings(lubridate::as_date(lubridate::parse_date_time(`Results Submit Date`, c("ymd","bdy"), truncated = 1))),
+          `Last Update Date`    = base::suppressWarnings(lubridate::as_date(lubridate::parse_date_time(`Last Update Date`,    c("ymd","bdy"), truncated = 1)))
+        )
+    },
+    final_cols = c("Change","Changed Field","Program","Guideline","URL","Acronym","Title","Condition","Status","Completion Date","Results Submit Date","Last Update Date")
+  ),
+  list( # ISRCTN
+    output_id  = "isrctn_monthly_change",
+    table      = "ISRCTN",
+    id_col     = "ISRCTN",
+    id_label   = "ISRCTN",
+    label_cols = c("Program","`Guideline.number`"),
+    meta       = list(url="URL", acronym="Acronym", title="Scientific_Title", condition=NULL),
+    diff_map   = c(
+      Registration_Status="Recruitment Status",
+      Results_url_link="Results URL",
+      Results_summary="Results Summary",
+      Results_date_completed="Results Completed",
+      Results_date_posted="Results Posted",
+      Results_date_first_publication="Results Published"
+    ),
+    ctx_map    = character(0),
+    ids_get    = isr_ids,
+    post_mutate= function(df, id_col){
+      df |>
+        dplyr::mutate(
+          Title = fast_trunc(.data[["Title"]], 75L),
+          `Results Completed` = base::suppressWarnings(lubridate::dmy(`Results Completed`)),
+          `Results Posted`    = base::suppressWarnings(lubridate::dmy(`Results Posted`)),
+          `Results Published` = base::suppressWarnings(lubridate::dmy(`Results Published`))
+        )
+    },
+    final_cols = c("Change","Changed Field","Program","Guideline","URL","Acronym","Title","Recruitment Status","Results URL","Results Summary","Results Completed","Results Posted","Results Published")
+  ),
+  list( # NIHR
+    output_id  = "nihr_monthly_change",
+    table      = "NIHR",
+    id_col     = "project_id",
+    id_label   = "NIHR ID",
+    label_cols = c("Program","`Guideline.number`"),
+    meta       = list(url="URL", acronym=NULL, title="project_title", condition=NULL),
+    diff_map   = c(project_status="Status", end_date="End Date"),
+    ctx_map    = character(0),
+    ids_get    = nihr_ids,
+    post_mutate= function(df, id_col){ df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) },
+    final_cols = c("Change","Changed Field","Program","Guideline","URL","NIHR ID","Title","Status","End Date")
+  ),
+  list( # EU
+    output_id  = "clinicaltrialseu_monthly_change",
+    table      = "EU",
+    id_col     = "EU_Ids",
+    id_label   = "EU ID",
+    label_cols = c("Program","`Guideline.number`"),
+    meta       = list(url="URL", acronym="a32_name_or_abbreviated_title_of_the_trial_where_available", title="a3_full_title_of_the_trial", condition=NULL),
+    diff_map   = c(p_end_of_trial_status="End of Trial Status"),
+    ctx_map    = c(a32_name_or_abbreviated_title_of_the_trial_where_available="Acronym", a3_full_title_of_the_trial="Title"),
+    ids_get    = eu_ids,
+    post_mutate= function(df, id_col){ df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) },
+    final_cols = c("Change","Changed Field","Program","Guideline","URL","EU ID","End of Trial Status","Acronym","Title")
   )
+)
 
-  dfs <- lapply(dfs, function(df) df |> dplyr::select(-project_id_filter))
+# ---- Wire all outputs (loop) ----
+base::lapply(configs, function(cfg){
+  output[[cfg$output_id]] <- DT::renderDT({
+    ids <- cfg$ids_get()
+    df  <- run_diff(cfg, ids, cutoff_date)
+    if (!base::nrow(df)) base::return(df)
 
-  compareDF::compare_df(
-    dfs$new,
-    dfs$old,
-    group_col = c("Guideline.number", "project_id"),
-    exclude = c("Query_Date"),
-    stop_on_error = FALSE
-  )$comparison_df |>
-    dplyr::left_join(dfs$new) |>
-    dplyr::mutate(
-      Title = stringr::str_trunc(project_title, 90L),
-      across(everything(), .fns = clean_utf8)
-    ) |>
-    dplyr::select(
-      Change = chng_type,
-      Program,
-      Guideline = Guideline.number,
-      URL,
-      `NIHR ID` = project_id,
-      Title,
-      Status = project_status,
-      `End Date` = end_date
-    ) |>
-    dplyr::distinct()
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-output$clinicaltrialseu_monthly_change <- DT::renderDT({
-  
-  req(main_con, trial_id_df, eu_data())
-
-  dfs <- get_new_old_df(eu_data(), EU_Ids, trial_id_df$EU_Ids)
-
-  compareDF::compare_df(
-    dfs$new,
-    dfs$old,
-    group_col = c("Guideline.number", "EU_Ids"),
-    exclude = c("Query_Date"),
-    stop_on_error = FALSE
-  )$comparison_df |>
-    dplyr::left_join(dfs$new) |>
-    dplyr::mutate(
-      Title = stringr::str_trunc(a3_full_title_of_the_trial, 90L),
-      across(everything(), .fns = clean_utf8)
-    ) |>
-    dplyr::select(
-      Change = chng_type,
-      Program,
-      Guideline = Guideline.number,
-      URL,
-      `EU ID` = EU_Ids,
-      Status = p_end_of_trial_status,
-      Acronym = a32_name_or_abbreviated_title_of_the_trial_where_available,
-      Title
-    ) |>
-    dplyr::distinct()
-}, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+    id_sym <- rlang::sym(cfg$id_col)
+    df |>
+      dplyr::rename(Guideline = .data[["Guideline.number"]]) |>
+      dplyr::rename(!!cfg$id_label := !!id_sym) |>
+      cfg$post_mutate(cfg$id_col) |>
+      dplyr::select(dplyr::all_of(cfg$final_cols)) |>
+      dplyr::distinct()
+  }, options = dt_opts_server, server = TRUE, filter = "top") |>
+    shiny::bindCache(mtime_reader(), cfg$ids_get()) |>
+    shiny::bindEvent(mtime_reader())
+  NULL
+})
 ```
 
-```{r ServerNoChangesInLast6M , context = "server"}
+```{r ServerNoChangesInLast6M , context = "server",echo = FALSE}
 
 # Shared helper for no-change tables
 generate_nochange_table <- function(
@@ -1069,7 +1167,7 @@ output$no_change_cteu <- DT::renderDT({
 }, options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
 ```
 
-```{r ServerUserInteractions , context = "server"}
+```{r ServerUserInteractions , context = "server", echo = FALSE}
 
 #### Functionality to add / remove / archive /comment
 
