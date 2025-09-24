@@ -786,56 +786,15 @@ output$live_trial_table_eu <- DT::renderDT({
 
 ```{r ServerRecentStatusChanges, context="server", echo=FALSE}
 
-# ----- SQL helpers (escaping, blocks) -----
-sql_ident <- function(con, x) as.character(DBI::dbQuoteIdentifier(con, x))
-sql_col   <- function(con, alias, col) sprintf('%s.%s', alias, sql_ident(con, base::gsub("`","", col, fixed=TRUE)))
-sql_raw   <- function(x) DBI::SQL(x)
-sql_union_all <- function(parts) glue::glue_collapse(parts, sep = "\nUNION ALL\n")
+# ---------- Safe SQL helpers ----------
+sql_ident      <- function(con, x) as.character(DBI::dbQuoteIdentifier(con, x))
+sql_col        <- function(con, alias, col) sprintf('%s.%s', alias, sql_ident(con, base::gsub("`","", col, fixed=TRUE)))
+sql_raw        <- function(x) DBI::SQL(x)
+sql_union_all  <- function(parts) glue::glue_collapse(parts, sep = "\nUNION ALL\n")
+collapse_select<- function(parts) glue::glue_collapse(parts, sep = ",\n       ")
 
-# Build per-field + / - SELECT unions in a robust way
-build_unions <- function(con, diff_map, id_col, labels_sql, ctx_sql, meta_sqls) {
-  id_q   <- sql_ident(con, id_col)
-  ctx_n  <- if (base::nzchar(ctx_sql$n)) base::paste0(",\n       ", ctx_sql$n) else ""
-  ctx_o  <- if (base::nzchar(ctx_sql$o)) base::paste0(",\n       ", ctx_sql$o) else ""
-
-  parts <- base::lapply(base::names(diff_map), function(src) {
-    alias <- base::unname(diff_map[[src]])
-    alias_q <- DBI::dbQuoteIdentifier(con, alias)
-    src_n <- sql_col(con, "n", src)
-    src_o <- sql_col(con, "o", src)
-
-    glue::glue_sql(
-      '
-      SELECT "+" AS Change, {DBI::dbQuoteString(con, alias)} AS "Changed Field",
-             {sql_raw(labels_sql)},
-             {sql_raw(meta_sqls$url)} {sql_raw(meta_sqls$acr)} {sql_raw(meta_sqls$title)} {sql_raw(meta_sqls$cond)},
-             {sql_raw(paste0(src_n, " AS ", alias_q))}
-             {sql_raw(ctx_n)},
-             DATE(n."Query_Date") AS "When",
-             COALESCE(n.{`id_q`}, o.{`id_q`}) AS {`id_q`}
-      FROM base
-      WHERE ({sql_raw(src_n)} IS NOT {sql_raw(src_o)})
-
-      UNION ALL
-
-      SELECT "-" AS Change, {DBI::dbQuoteString(con, alias)} AS "Changed Field",
-             {sql_raw(labels_sql)},
-             {sql_raw(meta_sqls$url)} {sql_raw(meta_sqls$acr)} {sql_raw(meta_sqls$title)} {sql_raw(meta_sqls$cond)},
-             {sql_raw(paste0(src_o, " AS ", alias_q))}
-             {sql_raw(ctx_o)},
-             DATE(o."Query_Date") AS "When",
-             COALESCE(n.{`id_q`}, o.{`id_q`}) AS {`id_q`}
-      FROM base
-      WHERE ({sql_raw(src_n)} IS NOT {sql_raw(src_o)})
-      ',
-      .con = con
-    )
-  })
-  sql_union_all(parts)
-}
-
-# ----- IDs via Trial_Ids (only identifiers; Program etc. come from registry tables) -----
-ids_cte_sql <- function(table) {
+# ---------- IDs via Trial_Ids (only the identifier) ----------
+ids_cte_sql <- function(table, id_col) {
   base::switch(
     table,
     "NCT" = '
@@ -868,39 +827,108 @@ ids_cte_sql <- function(table) {
   )
 }
 
-# ----- Core diff SQL (quoted; filtered; no temp tables) -----
+# ---------- Vectorised union block builder (+ / - rows per changed field) ----------
+build_unions <- function(con, diff_map, id_col, label_cols_plus, meta, ctx_map) {
+  id_q <- sql_ident(con, id_col)
+
+  # Labels as vector (no commas inside)
+  labels_vec <- vapply(label_cols_plus, function(col) {
+    if (col == "Date Added") base::sprintf('base."%s" AS "%s"', col, col)
+    else                     base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "%1$s"', col)
+  }, character(1L))
+
+  # Meta as vector
+  meta_vec <- base::c(
+    if (base::is.null(meta[["url"]]))        'NULL AS "URL"'        else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "URL"',        meta[["url"]]),
+    if (base::is.null(meta[["acronym"]]))    'NULL AS "Acronym"'    else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Acronym"',    meta[["acronym"]]),
+    if (base::is.null(meta[["title"]]))      'NULL AS "Title"'      else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Title"',      meta[["title"]]),
+    if (base::is.null(meta[["condition"]]))  'NULL AS "Condition"'  else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Condition"',  meta[["condition"]])
+  )
+
+  # Context vectors per side
+  ctx_vec <- function(side) {
+    if (!base::length(ctx_map)) character(0) else
+      vapply(base::names(ctx_map), function(k) base::sprintf('%s."%s" AS "%s"', side, k, base::unname(ctx_map[[k]])), character(1L))
+  }
+
+  # Diff vector: all diff columns present each time; only the active src is filled, others NULL
+  diff_vec <- function(side, which_src) {
+    vapply(base::names(diff_map), function(src) {
+      alias <- base::unname(diff_map[[src]])
+      alias_q <- sql_ident(con, alias)
+      if (base::identical(src, which_src)) base::sprintf('%s."%s" AS %s', side, src, alias_q)
+      else                                 base::sprintf('NULL AS %s', alias_q)
+    }, character(1L))
+  }
+
+  # Build one +/− block per field
+  parts <- base::lapply(base::names(diff_map), function(src) {
+    where_diff <- base::sprintf('(n.%s IS NOT o.%s)', sql_ident(con, src), sql_ident(con, src))
+
+    plus_vec  <- base::c(labels_vec, meta_vec, diff_vec("n", src), ctx_vec("n"))
+    minus_vec <- base::c(labels_vec, meta_vec, diff_vec("o", src), ctx_vec("o"))
+
+    plus_sel  <- collapse_select(plus_vec)
+    minus_sel <- collapse_select(minus_vec)
+
+    glue::glue_sql(
+      '
+      SELECT "+" AS Change, {DBI::dbQuoteString(con, base::unname(diff_map[[src]]))} AS "Changed Field",
+             {sql_raw(plus_sel)},
+             DATE(n."Query_Date") AS "When",
+             COALESCE(n.{`id_q`}, o.{`id_q`}) AS {`id_q`}
+      FROM base
+      WHERE {sql_raw(where_diff)}
+
+      UNION ALL
+
+      SELECT "-" AS Change, {DBI::dbQuoteString(con, base::unname(diff_map[[src]]))} AS "Changed Field",
+             {sql_raw(minus_sel)},
+             DATE(o."Query_Date") AS "When",
+             COALESCE(n.{`id_q`}, o.{`id_q`}) AS {`id_q`}
+      FROM base
+      WHERE {sql_raw(where_diff)}
+      ',
+      .con = con
+    )
+  })
+
+  sql_union_all(parts)
+}
+
+# ---------- Core diff SQL (IDs filtered; commas handled via vectors) ----------
 build_diff_sql_filtered <- function(con, table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date) {
   label_cols <- base::gsub("`", "", label_cols, fixed=TRUE)
   id_col     <- base::gsub("`", "", id_col,     fixed=TRUE)
   table      <- base::gsub("`", "", table,      fixed=TRUE)
 
-  # labels (+ Date Added)
   label_cols_plus <- base::c(label_cols, "Date Added")
-  coalesce_label <- function(col) {
+
+  unions_sql <- build_unions(con, diff_map, id_col, label_cols_plus, meta, ctx_map)
+
+  # Added/Removed select lists use NULL for all diff columns
+  diff_nulls_vec <- vapply(base::unname(diff_map), function(alias) {
+    base::sprintf('NULL AS %s', sql_ident(con, alias))
+  }, character(1L))
+
+  # Rebuild label/meta/ctx vectors for added/removed
+  labels_vec <- vapply(label_cols_plus, function(col) {
     if (col == "Date Added") base::sprintf('base."%s" AS "%s"', col, col)
     else                     base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "%1$s"', col)
-  }
-  labels_sql <- base::paste(vapply(label_cols_plus, coalesce_label, character(1L)), collapse = ",\n           ")
-
-  meta_part <- function(src, out) {
-    if (base::is.null(meta[[src]])) base::sprintf('NULL AS "%s",', out)
-    else                            base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "%2$s",', meta[[src]], out)
-  }
-  meta_sqls <- base::list(
-    url   = meta_part("url",      "URL"),
-    acr   = meta_part("acronym",  "Acronym"),
-    title = meta_part("title",    "Title"),
-    cond  = meta_part("condition","Condition")
+  }, character(1L))
+  meta_vec <- base::c(
+    if (base::is.null(meta[["url"]]))        'NULL AS "URL"'        else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "URL"',        meta[["url"]]),
+    if (base::is.null(meta[["acronym"]]))    'NULL AS "Acronym"'    else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Acronym"',    meta[["acronym"]]),
+    if (base::is.null(meta[["title"]]))      'NULL AS "Title"'      else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Title"',      meta[["title"]]),
+    if (base::is.null(meta[["condition"]]))  'NULL AS "Condition"'  else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Condition"',  meta[["condition"]])
   )
+  ctx_n_vec <- if (!base::length(ctx_map)) character(0) else
+    vapply(base::names(ctx_map), function(k) base::sprintf('n."%s" AS "%s"', k, base::unname(ctx_map[[k]])), character(1L))
+  ctx_o_vec <- if (!base::length(ctx_map)) character(0) else
+    vapply(base::names(ctx_map), function(k) base::sprintf('o."%s" AS "%s"', k, base::unname(ctx_map[[k]])), character(1L))
 
-  ctx_sql <- base::list(
-    n = if (!base::length(ctx_map)) "" else base::paste(vapply(base::names(ctx_map), function(k)
-         base::sprintf('n."%s" AS "%s"', k, base::unname(ctx_map[[k]])), character(1L)), collapse = ",\n           "),
-    o = if (!base::length(ctx_map)) "" else base::paste(vapply(base::names(ctx_map), function(k)
-         base::sprintf('o."%s" AS "%s"', k, base::unname(ctx_map[[k]])), character(1L)), collapse = ",\n           ")
-  )
-
-  unions <- build_unions(con, diff_map, id_col, labels_sql, ctx_sql, meta_sqls)
+  select_added   <- collapse_select(base::c(labels_vec, meta_vec, diff_nulls_vec, ctx_n_vec))
+  select_removed <- collapse_select(base::c(labels_vec, meta_vec, diff_nulls_vec, ctx_o_vec))
 
   join_base <- base::switch(
     table,
@@ -908,10 +936,12 @@ build_diff_sql_filtered <- function(con, table, id_col, label_cols, meta, diff_m
     base::sprintf('USING("%s")', id_col)
   )
 
-  sql <- glue::glue_sql(
+  id_q <- sql_ident(con, id_col)
+
+  glue::glue_sql(
     "
 WITH
-  {DBI::SQL(ids_cte_sql(table))},
+  {DBI::SQL(ids_cte_sql(table, id_col))},
   base_src AS (
     SELECT t.*
     FROM {`table`} t
@@ -947,34 +977,33 @@ WITH
     LEFT JOIN first_seen fs USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
     WHERE n.{DBI::SQL(base::sprintf('\"%s\"', id_col))} IS NULL
   )
-{sql_raw(unions)}
+{sql_raw(unions_sql)}
+
 UNION ALL
-SELECT '+' AS Change, 'Added' AS \"Changed Field\", {sql_raw(labels_sql)},
-       {sql_raw(meta_sqls$url)} {sql_raw(meta_sqls$acr)} {sql_raw(meta_sqls$title)} {sql_raw(meta_sqls$cond)},
-       {sql_raw(base::paste(base::rep('NULL', base::length(diff_map)), collapse=', '))}{sql_raw(if (base::nzchar(ctx_sql$n)) base::paste0(', ', ctx_sql$n) else '')},
+SELECT '+' AS Change, 'Added' AS \"Changed Field\",
+       {sql_raw(select_added)},
        DATE(n.\"Query_Date\") AS \"When\",
        n.{DBI::SQL(base::sprintf('\"%s\"', id_col))} AS {DBI::SQL(base::sprintf('\"%s\"', id_col))}
 FROM base
 WHERE o.{DBI::SQL(base::sprintf('\"%s\"', id_col))} IS NULL
 
 UNION ALL
-SELECT '-' AS Change, 'Removed' AS \"Changed Field\", {sql_raw(labels_sql)},
-       {sql_raw(meta_sqls$url)} {sql_raw(meta_sqls$acr)} {sql_raw(meta_sqls$title)} {sql_raw(meta_sqls$cond)},
-       {sql_raw(base::paste(base::rep('NULL', base::length(diff_map)), collapse=', '))}{sql_raw(if (base::length(ctx_map)) base::paste0(', ', base::paste(base::rep('NULL', base::length(ctx_map)), collapse=', ')) else '')},
+SELECT '-' AS Change, 'Removed' AS \"Changed Field\",
+       {sql_raw(select_removed)},
        DATE(o.\"Query_Date\") AS \"When\",
        o.{DBI::SQL(base::sprintf('\"%s\"', id_col))} AS {DBI::SQL(base::sprintf('\"%s\"', id_col))}
 FROM base
 WHERE n.{DBI::SQL(base::sprintf('\"%s\"', id_col))} IS NULL
+
 ORDER BY \"When\" DESC, {DBI::SQL(base::sprintf('\"%s\"', id_col))};
 ",
     cutoff_date = cutoff_date,
     .con = con
-  )
-
-  base::as.character(sql)
+  ) |>
+    base::as.character()
 }
 
-# Tiny wrappers
+# ---------- Exec wrappers ----------
 diff_sql_for <- function(cfg, cutoff_date) {
   build_diff_sql_filtered(pool_con, cfg$table, cfg$id_col, cfg$label_cols, cfg$meta, cfg$diff_map, cfg$ctx_map, cutoff_date)
 }
@@ -982,7 +1011,7 @@ run_diff_filtered <- function(cfg, cutoff_date) {
   DBI::dbGetQuery(pool_con, diff_sql_for(cfg, cutoff_date))
 }
 
-# ----- Configs (ids_get removed; simpler) -----
+# ---------- Configs ----------
 cutoff_date <- base::Sys.Date() - 31L
 
 configs <- base::list(
@@ -1061,7 +1090,7 @@ configs <- base::list(
   )
 )
 
-# ----- Wire outputs -----
+# ---------- Renderers ----------
 base::lapply(configs, function(cfg){
   output[[cfg$output_id]] <- DT::renderDT({
     df <- run_diff_filtered(cfg, cutoff_date)
