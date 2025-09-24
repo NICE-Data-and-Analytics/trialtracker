@@ -792,22 +792,57 @@ output$live_trial_table_eu <- DT::renderDT({
 
 ```{r ServerRecentStatusChanges, context="server", echo = FALSE}
 
-build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date, ids_tmp) {
+# --- ID filter CTEs sourced from Trial_Ids ---
+ids_cte_sql <- function(table) {
+  switch(
+    table,
+    "NCT" = '
+      ids AS (
+        SELECT DISTINCT TRIM("NCT_Ids") AS "NCTId"
+        FROM "Trial_Ids"
+        WHERE "NCT_Ids" IS NOT NULL AND TRIM("NCT_Ids") <> ""
+      )',
+    "ISRCTN" = '
+      ids AS (
+        SELECT DISTINCT TRIM("ISRCTN_Ids") AS "ISRCTN_No"
+        FROM "Trial_Ids"
+        WHERE "ISRCTN_Ids" IS NOT NULL AND TRIM("ISRCTN_Ids") <> ""
+      )',
+    "NIHR" = '
+      ids AS (
+        SELECT DISTINCT
+          TRIM("NIHR_Ids") AS "NIHR_Ids_raw",
+          REPLACE(REPLACE(TRIM("NIHR_Ids"),"-",""),"/","") AS "id_norm"
+        FROM "Trial_Ids"
+        WHERE "NIHR_Ids" IS NOT NULL AND TRIM("NIHR_Ids") <> ""
+      )',
+    "EU" = '
+      ids AS (
+        SELECT DISTINCT TRIM("EU_Ids") AS "EU_Ids"
+        FROM "Trial_Ids"
+        WHERE "EU_Ids" IS NOT NULL AND TRIM("EU_Ids") <> ""
+      )',
+    stop("Unsupported table in ids_cte_sql: ", table)
+  )
+}
+
+# --- Quoted, filtered diff SQL (no temp tables; IDs from Trial_Ids) ---
+build_diff_sql_filtered <- function(con, table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date) {
   label_cols <- gsub("`", "", label_cols, fixed = TRUE)
   id_col     <- gsub("`", "", id_col,     fixed = TRUE)
   table      <- gsub("`", "", table,      fixed = TRUE)
 
+  # coalesced label set includes Date Added
   label_cols_plus <- c(label_cols, "Date Added")
-
   coalesce_label <- function(col) {
     if (col == "Date Added") sprintf('base."%s" AS "%s"', col, col)
-    else sprintf('COALESCE(%s, %s) AS "%s"', .qq("n", col), .qq("o", col), col)
+    else sprintf('COALESCE(n."%1$s", o."%1$s") AS "%1$s"', col)
   }
   labels_sql <- paste(vapply(label_cols_plus, coalesce_label, character(1)), collapse = ",\n           ")
 
   meta_part <- function(src, out) {
     if (is.null(meta[[src]])) sprintf('NULL AS "%s",', out)
-    else sprintf('COALESCE(%s, %s) AS "%s",', .qq("n", meta[[src]]), .qq("o", meta[[src]]), out)
+    else sprintf('COALESCE(n."%1$s", o."%1$s") AS "%2$s",', meta[[src]], out)
   }
   meta_url   <- meta_part("url","URL")
   meta_acr   <- meta_part("acronym","Acronym")
@@ -817,14 +852,13 @@ build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, c
   ctx_select <- function(side = "n") {
     if (!length(ctx_map)) return("")
     paste(vapply(seq_along(ctx_map), function(i) {
-      sprintf('%s AS "%s"', .qq(side, names(ctx_map)[i]), unname(ctx_map)[i])
+      sprintf('%s."%s" AS "%s"', side, names(ctx_map)[i], unname(ctx_map)[i])
     }, character(1)), collapse = ",\n           ")
   }
-
   diff_select_for <- function(side, which_src) {
     paste(vapply(seq_along(diff_map), function(i) {
       src <- names(diff_map)[i]; alias <- unname(diff_map)[i]
-      if (identical(src, which_src)) sprintf('%s AS "%s"', .qq(side, src), alias)
+      if (identical(src, which_src)) sprintf('%s."%s" AS "%s"', side, src, alias)
       else                           sprintf('NULL AS "%s"', alias)
     }, character(1)), collapse = ",\n           ")
   }
@@ -832,82 +866,93 @@ build_diff_sql <- function(table, id_col, label_cols, meta, diff_map, ctx_map, c
   unions <- paste(vapply(names(diff_map), function(src) {
     alias <- diff_map[[src]]
     paste0(
-      "SELECT '+' AS Change, '", alias, "' AS \"Changed Field\", ", labels_sql, ",\n",
+      'SELECT "+" AS Change, \'', alias, '\' AS "Changed Field", ', labels_sql, ",\n",
       "       ", meta_url, "\n       ", meta_acr, "\n       ", meta_title, "\n       ", meta_cond, "\n",
       "       ", diff_select_for("n", src),
       if (length(ctx_map)) paste0(",\n       ", ctx_select("n")) else "",
-      ",\n       DATE(", .qq("n","Query_Date"), ") AS `When`, COALESCE(", .qq("n", id_col), ", ", .qq("o", id_col), ') AS "', id_col, "\"\n",
-      "FROM base WHERE (", .qq("n", src), " IS NOT ", .qq("o", src), ")\nUNION ALL\n",
-      "SELECT '-' AS Change, '", alias, "' AS \"Changed Field\", ", labels_sql, ",\n",
+      sprintf(',\n       DATE(n."Query_Date") AS "When", COALESCE(n."%1$s", o."%1$s") AS "%1$s"', id_col), "\n",
+      'FROM base WHERE (n."', src, '" IS NOT o."', src, '")',
+      "\nUNION ALL\n",
+      'SELECT "-" AS Change, \'', alias, '\' AS "Changed Field", ', labels_sql, ",\n",
       "       ", meta_url, "\n       ", meta_acr, "\n       ", meta_title, "\n       ", meta_cond, "\n",
       "       ", diff_select_for("o", src),
       if (length(ctx_map)) paste0(",\n       ", ctx_select("n")) else "",
-      ",\n       DATE(", .qq("o","Query_Date"), ") AS `When`, COALESCE(", .qq("n", id_col), ", ", .qq("o", id_col), ') AS "', id_col, "\"\n",
-      "FROM base WHERE (", .qq("n", src), " IS NOT ", .qq("o", src), ")"
+      sprintf(',\n       DATE(o."Query_Date") AS "When", COALESCE(n."%1$s", o."%1$s") AS "%1$s"', id_col), "\n",
+      'FROM base WHERE (n."', src, '" IS NOT o."', src, '")'
     )
   }, character(1)), collapse = "\nUNION ALL\n")
 
-  ctx_nulls <- if (length(ctx_map)) paste(rep("NULL", length(ctx_map)), collapse = ", ") else ""
-  ctx_news  <- ctx_select("n")
-  diff_nulls<- paste(rep("NULL", length(diff_map)), collapse = ", ")
-  ctx_news_clause  <- if (nzchar(ctx_news))  paste0(", ", ctx_news) else ""
-  ctx_nulls_clause <- if (nzchar(ctx_nulls)) paste0(", ", ctx_nulls) else ""
+  # join predicate for base_src
+  join_base <- switch(
+    table,
+    "NIHR" = 'ON REPLACE(REPLACE(t."project_id","-",""),"/","") = ids."id_norm"',
+    # others: USING(id_col)
+    sprintf('USING("%s")', id_col)
+  )
 
-  glue::glue(
-"WITH
-  ids AS (SELECT \"{id_col}\" FROM {ids_tmp}),
+  sql <- glue::glue_sql(
+    "
+WITH
+  {DBI::SQL(ids_cte_sql(table))},
+  base_src AS (
+    SELECT t.*
+    FROM {`table`} t
+    JOIN ids {DBI::SQL(join_base)}
+  ),
   n_rank AS (
-    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY \"{id_col}\" ORDER BY \"Query_Date\" DESC) rn
-    FROM \"{table}\" t JOIN ids USING(\"{id_col}\")
+    SELECT base_src.*,
+           ROW_NUMBER() OVER (PARTITION BY {DBI::SQL(sprintf('\"%s\"', id_col))} ORDER BY \"Query_Date\" DESC) rn
+    FROM base_src
   ),
   n AS (SELECT * FROM n_rank WHERE rn = 1),
   o_rank AS (
-    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY \"{id_col}\" ORDER BY \"Query_Date\" DESC) rn
-    FROM \"{table}\" t JOIN ids USING(\"{id_col}\")
-    WHERE DATE(t.\"Query_Date\") <= DATE('{cutoff_date}')
+    SELECT base_src.*,
+           ROW_NUMBER() OVER (PARTITION BY {DBI::SQL(sprintf('\"%s\"', id_col))} ORDER BY \"Query_Date\" DESC) rn
+    FROM base_src
+    WHERE DATE(\"Query_Date\") <= DATE({cutoff_date})
   ),
   o AS (SELECT * FROM o_rank WHERE rn = 1),
   first_seen AS (
-    SELECT \"{id_col}\", DATE(MIN(\"Query_Date\")) AS \"Date Added\"
-    FROM \"{table}\" JOIN ids USING(\"{id_col}\")
-    GROUP BY \"{id_col}\"
+    SELECT {DBI::SQL(sprintf('\"%s\"', id_col))}, DATE(MIN(\"Query_Date\")) AS \"Date Added\"
+    FROM base_src
+    GROUP BY {DBI::SQL(sprintf('\"%s\"', id_col))}
   ),
   base AS (
     SELECT fs.\"Date Added\", n.*, o.*
     FROM n
-    LEFT JOIN o  USING(\"{id_col}\")
-    LEFT JOIN first_seen fs USING(\"{id_col}\")
+    LEFT JOIN o  USING({DBI::SQL(sprintf('\"%s\"', id_col))})
+    LEFT JOIN first_seen fs USING({DBI::SQL(sprintf('\"%s\"', id_col))})
     UNION ALL
     SELECT fs.\"Date Added\", n.*, o.*
     FROM o
-    LEFT JOIN n USING(\"{id_col}\")
-    LEFT JOIN first_seen fs USING(\"{id_col}\")
-    WHERE ", .qq("n", id_col), " IS NULL
+    LEFT JOIN n USING({DBI::SQL(sprintf('\"%s\"', id_col))})
+    LEFT JOIN first_seen fs USING({DBI::SQL(sprintf('\"%s\"', id_col))})
+    WHERE n.{DBI::SQL(sprintf('\"%s\"', id_col))} IS NULL
   )
-{unions}
+{DBI::SQL(unions)}
 UNION ALL
-SELECT '+' AS Change, 'Added' AS \"Changed Field\", {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} {diff_nulls}{ctx_news_clause},
-       DATE(", .qq("n","Query_Date"), ") AS `When`, ", .qq("n", id_col), " AS \"{id_col}\"
-FROM base WHERE ", .qq("o", id_col), " IS NULL
+SELECT '+' AS Change, 'Added' AS \"Changed Field\", {DBI::SQL(labels_sql)}, {DBI::SQL(meta_url)} {DBI::SQL(meta_acr)} {DBI::SQL(meta_title)} {DBI::SQL(meta_cond)} {DBI::SQL(paste(rep('NULL', length(diff_map)), collapse=', '))}{DBI::SQL(if (nzchar(ctx_select('n'))) paste0(', ', ctx_select('n')) else '')},
+       DATE(n.\"Query_Date\") AS \"When\", n.{DBI::SQL(sprintf('\"%s\"', id_col))} AS {DBI::SQL(sprintf('\"%s\"', id_col))}
+FROM base WHERE o.{DBI::SQL(sprintf('\"%s\"', id_col))} IS NULL
 UNION ALL
-SELECT '-' AS Change, 'Removed' AS \"Changed Field\", {labels_sql}, {meta_url} {meta_acr} {meta_title} {meta_cond} {diff_nulls}{ctx_nulls_clause},
-       DATE(", .qq("o","Query_Date"), ") AS `When`, ", .qq("o", id_col), " AS \"{id_col}\"
-FROM base WHERE ", .qq("n", id_col), " IS NULL
-ORDER BY `When` DESC, \"{id_col}\";"
+SELECT '-' AS Change, 'Removed' AS \"Changed Field\", {DBI::SQL(labels_sql)}, {DBI::SQL(meta_url)} {DBI::SQL(meta_acr)} {DBI::SQL(meta_title)} {DBI::SQL(meta_cond)} {DBI::SQL(paste(rep('NULL', length(diff_map)), collapse=', '))}{DBI::SQL(if (length(ctx_map)) paste0(', ', paste(rep('NULL', length(ctx_map)), collapse=', ')) else '')},
+       DATE(o.\"Query_Date\") AS \"When\", o.{DBI::SQL(sprintf('\"%s\"', id_col))} AS {DBI::SQL(sprintf('\"%s\"', id_col))}
+FROM base WHERE n.{DBI::SQL(sprintf('\"%s\"', id_col))} IS NULL
+ORDER BY \"When\" DESC, {DBI::SQL(sprintf('\"%s\"', id_col))};
+",
+    cutoff_date = cutoff_date,
+    .con = con
   )
+
+  as.character(sql)
 }
 
-run_diff <- function(cfg, ids, cutoff_date) {
-  if (!base::length(ids)) return(base::data.frame())
-  tmp <- base::paste0("_tmp_ids_", cfg$id_col, "_", base::as.integer(stats::runif(1, 1e6, 9e6)))
-  DBI::dbExecute(pool_con, glue::glue("DROP TABLE IF EXISTS {tmp};"))
-  DBI::dbExecute(pool_con, glue::glue('CREATE TEMP TABLE {tmp} ("{cfg$id_col}" TEXT PRIMARY KEY);'))
-  DBI::dbWriteTable(pool_con, tmp, stats::setNames(base::data.frame(ids, check.names = FALSE), cfg$id_col), append = TRUE)
-  on.exit(DBI::dbExecute(pool_con, glue::glue("DROP TABLE IF EXISTS {tmp};")), add = TRUE)
-  sql <- build_diff_sql(cfg$table, cfg$id_col, cfg$label_cols, cfg$meta, cfg$diff_map, cfg$ctx_map, cutoff_date, tmp)
+run_diff_filtered <- function(cfg, cutoff_date) {
+  sql <- build_diff_sql_filtered(pool_con, cfg$table, cfg$id_col, cfg$label_cols, cfg$meta, cfg$diff_map, cfg$ctx_map, cutoff_date)
   DBI::dbGetQuery(pool_con, sql)
 }
 
+# --- Configs: no ids_get now; labels/meta/diff per registry only ---
 cutoff_date <- base::Sys.Date() - 31L
 
 configs <- list(
@@ -920,7 +965,6 @@ configs <- list(
     meta       = list(url="URL", acronym="Acronym", title="BriefTitle", condition="Condition"),
     diff_map   = c(OverallStatus="Status", CompletionDate="Completion Date", LastUpdatePostDate="Last Update Date"),
     ctx_map    = c(ResultsFirstSubmitDate="Results Submit Date"),
-    ids_get    = nct_ids,
     post_mutate= function(df, id_col){
       df |>
         dplyr::mutate(
@@ -950,7 +994,6 @@ configs <- list(
       Results_date_first_publication="Results Published"
     ),
     ctx_map    = character(0),
-    ids_get    = isr_ids,
     post_mutate= function(df, id_col){
       df |>
         dplyr::mutate(
@@ -971,7 +1014,6 @@ configs <- list(
     meta       = list(url="URL", acronym=NULL, title="project_title", condition=NULL),
     diff_map   = c(project_status="Status", end_date="End Date"),
     ctx_map    = character(0),
-    ids_get    = nihr_ids,
     post_mutate= function(df, id_col){ df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) },
     final_cols = c("Change","Changed Field","Program","Guideline","Date Added","URL","NIHR ID","Title","Status","End Date")
   ),
@@ -984,35 +1026,25 @@ configs <- list(
     meta       = list(url="URL", acronym="a32_name_or_abbreviated_title_of_the_trial_where_available", title="a3_full_title_of_the_trial", condition=NULL),
     diff_map   = c(p_end_of_trial_status="End of Trial Status"),
     ctx_map    = c(a32_name_or_abbreviated_title_of_the_trial_where_available="Acronym", a3_full_title_of_the_trial="Title"),
-    ids_get    = eu_ids,
     post_mutate= function(df, id_col){ df |> dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) },
     final_cols = c("Change","Changed Field","Program","Guideline","Date Added","URL","EU ID","End of Trial Status","Acronym","Title")
   )
 )
 
-# Cached producers + renderers (unchanged shape)
+# --- Wire outputs (simple + readable) ---
 base::lapply(configs, function(cfg){
-  local({
-    cfg2 <- cfg
-    data_rx <- shiny::reactive({
-      ids <- cfg2$ids_get()
-      run_diff(cfg2, ids, cutoff_date)
-    }) |>
-      shiny::bindCache(mtime_reader(), cfg2$ids_get()) |>
-      shiny::bindEvent(mtime_reader())
-
-    output[[cfg2$output_id]] <- DT::renderDT({
-      df <- data_rx()
-      if (!base::nrow(df)) base::return(df)
-      id_sym <- rlang::sym(cfg2$id_col)
-      df |>
-        dplyr::rename(Guideline = .data[["Guideline.number"]]) |>
-        dplyr::rename(!!cfg2$id_label := !!id_sym) |>
-        cfg2$post_mutate(cfg2$id_col) |>
-        dplyr::select(dplyr::all_of(cfg2$final_cols)) |>
-        dplyr::distinct()
-    }, options = dt_opts_server, server = TRUE, filter = "top")
-  })
+  output[[cfg$output_id]] <- DT::renderDT({
+    df <- run_diff_filtered(cfg, cutoff_date)
+    if (!base::nrow(df)) base::return(df)
+    id_sym <- rlang::sym(cfg$id_col)
+    df |>
+      dplyr::rename(Guideline = .data[["Guideline.number"]]) |>
+      dplyr::rename(!!cfg$id_label := !!id_sym) |>
+      cfg$post_mutate(cfg$id_col) |>
+      dplyr::select(dplyr::all_of(cfg$final_cols)) |>
+      dplyr::distinct()
+  }, options = dt_opts_server, server = TRUE, filter = "top") |>
+    shiny::bindEvent(mtime_reader())
   NULL
 })
 
