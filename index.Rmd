@@ -787,11 +787,11 @@ output$live_trial_table_eu <- DT::renderDT({
 ```{r ServerRecentStatusChanges, context="server", echo=FALSE}
 
 # ---------- Safe SQL helpers ----------
-sql_ident      <- function(con, x) as.character(DBI::dbQuoteIdentifier(con, x))
-sql_col        <- function(con, alias, col) sprintf('%s.%s', alias, sql_ident(con, base::gsub("`","", col, fixed=TRUE)))
-sql_raw        <- function(x) DBI::SQL(x)
-sql_union_all  <- function(parts) glue::glue_collapse(parts, sep = "\nUNION ALL\n")
-collapse_select<- function(parts) glue::glue_collapse(parts, sep = ",\n       ")
+sql_ident       <- function(con, x) as.character(DBI::dbQuoteIdentifier(con, x))
+sql_col         <- function(con, alias, col) sprintf('%s.%s', alias, sql_ident(con, base::gsub("`","", col, fixed=TRUE)))
+sql_raw         <- function(x) DBI::SQL(x)
+sql_union_all   <- function(parts) glue::glue_collapse(parts, sep = "\nUNION ALL\n")
+collapse_select <- function(parts) glue::glue_collapse(parts, sep = ",\n       ")
 
 # ---------- IDs via Trial_Ids (only the identifier) ----------
 ids_cte_sql <- function(table, id_col) {
@@ -827,76 +827,78 @@ ids_cte_sql <- function(table, id_col) {
   )
 }
 
-# ---------- Vectorised union block builder (+ / - rows per changed field) ----------
-build_unions <- function(con, diff_map, id_col, label_cols_plus, meta, ctx_map) {
-  id_q <- sql_ident(con, id_col)
-
-  # Labels as vector (no commas inside)
-  labels_vec <- vapply(label_cols_plus, function(col) {
-    if (col == "Date Added") base::sprintf('base."%s" AS "%s"', col, col)
+# ---------- Vectorised SELECT builders ----------
+build_labels_vec <- function(label_cols_plus) {
+  vapply(label_cols_plus, function(col) {
+    if (col == "Date Added") base::sprintf('fs."%s" AS "%s"', col, col)
     else                     base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "%1$s"', col)
   }, character(1L))
-
-  # Meta as vector
-  meta_vec <- base::c(
+}
+build_meta_vec <- function(meta) {
+  base::c(
     if (base::is.null(meta[["url"]]))        'NULL AS "URL"'        else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "URL"',        meta[["url"]]),
     if (base::is.null(meta[["acronym"]]))    'NULL AS "Acronym"'    else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Acronym"',    meta[["acronym"]]),
     if (base::is.null(meta[["title"]]))      'NULL AS "Title"'      else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Title"',      meta[["title"]]),
     if (base::is.null(meta[["condition"]]))  'NULL AS "Condition"'  else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Condition"',  meta[["condition"]])
   )
+}
+build_ctx_vec <- function(ctx_map, side) {
+  if (!base::length(ctx_map)) character(0) else
+    vapply(base::names(ctx_map), function(k) base::sprintf('%s."%s" AS "%s"', side, k, base::unname(ctx_map[[k]])), character(1L))
+}
+build_diff_vec <- function(con, diff_map, side, which_src) {
+  vapply(base::names(diff_map), function(src) {
+    alias <- base::unname(diff_map[[src]])
+    alias_q <- sql_ident(con, alias)
+    if (base::identical(src, which_src)) base::sprintf('%s."%s" AS %s', side, src, alias_q)
+    else                                 base::sprintf('NULL AS %s', alias_q)
+  }, character(1L))
+}
 
-  # Context vectors per side
-  ctx_vec <- function(side) {
-    if (!base::length(ctx_map)) character(0) else
-      vapply(base::names(ctx_map), function(k) base::sprintf('%s."%s" AS "%s"', side, k, base::unname(ctx_map[[k]])), character(1L))
-  }
+# ---------- Build all UNION legs using real n/o aliases in FROM ----------
+build_unions <- function(con, diff_map, id_col, label_cols_plus, meta, ctx_map) {
+  id_q <- sql_ident(con, id_col)
+  labels_vec <- build_labels_vec(label_cols_plus)
+  meta_vec   <- build_meta_vec(meta)
 
-  # Diff vector: all diff columns present each time; only the active src is filled, others NULL
-  diff_vec <- function(side, which_src) {
-    vapply(base::names(diff_map), function(src) {
-      alias <- base::unname(diff_map[[src]])
-      alias_q <- sql_ident(con, alias)
-      if (base::identical(src, which_src)) base::sprintf('%s."%s" AS %s', side, src, alias_q)
-      else                                 base::sprintf('NULL AS %s', alias_q)
-    }, character(1L))
-  }
+  base::lapply(base::names(diff_map), function(src) {
+    alias     <- base::unname(diff_map[[src]])
+    alias_q   <- sql_ident(con, alias)
+    where_diff<- base::sprintf('(n.%s IS NOT o.%s)', sql_ident(con, src), sql_ident(con, src))
 
-  # Build one +/− block per field
-  parts <- base::lapply(base::names(diff_map), function(src) {
-    where_diff <- base::sprintf('(n.%s IS NOT o.%s)', sql_ident(con, src), sql_ident(con, src))
-
-    plus_vec  <- base::c(labels_vec, meta_vec, diff_vec("n", src), ctx_vec("n"))
-    minus_vec <- base::c(labels_vec, meta_vec, diff_vec("o", src), ctx_vec("o"))
-
-    plus_sel  <- collapse_select(plus_vec)
-    minus_sel <- collapse_select(minus_vec)
+    plus_sel  <- collapse_select(base::c(labels_vec, meta_vec, build_diff_vec(con, diff_map, "n", src), build_ctx_vec(ctx_map, "n")))
+    minus_sel <- collapse_select(base::c(labels_vec, meta_vec, build_diff_vec(con, diff_map, "o", src), build_ctx_vec(ctx_map, "o")))
 
     glue::glue_sql(
       '
-      SELECT "+" AS Change, {DBI::dbQuoteString(con, base::unname(diff_map[[src]]))} AS "Changed Field",
+      -- "+" leg for {`alias`}
+      SELECT "+" AS Change, {DBI::dbQuoteString(con, alias)} AS "Changed Field",
              {sql_raw(plus_sel)},
              DATE(n."Query_Date") AS "When",
              COALESCE(n.{`id_q`}, o.{`id_q`}) AS {`id_q`}
-      FROM base
+      FROM n
+      LEFT JOIN o USING({`id_q`})
+      LEFT JOIN first_seen fs USING({`id_q`})
       WHERE {sql_raw(where_diff)}
 
       UNION ALL
 
-      SELECT "-" AS Change, {DBI::dbQuoteString(con, base::unname(diff_map[[src]]))} AS "Changed Field",
+      -- "-" leg for {`alias`}
+      SELECT "-" AS Change, {DBI::dbQuoteString(con, alias)} AS "Changed Field",
              {sql_raw(minus_sel)},
              DATE(o."Query_Date") AS "When",
              COALESCE(n.{`id_q`}, o.{`id_q`}) AS {`id_q`}
-      FROM base
+      FROM o
+      LEFT JOIN n USING({`id_q`})
+      LEFT JOIN first_seen fs USING({`id_q`})
       WHERE {sql_raw(where_diff)}
       ',
       .con = con
     )
-  })
-
-  sql_union_all(parts)
+  }) |> sql_union_all()
 }
 
-# ---------- Core diff SQL (IDs filtered; commas handled via vectors) ----------
+# ---------- Core diff SQL (IDs filtered; correct alias scopes; comma-safe) ----------
 build_diff_sql_filtered <- function(con, table, id_col, label_cols, meta, diff_map, ctx_map, cutoff_date) {
   label_cols <- base::gsub("`", "", label_cols, fixed=TRUE)
   id_col     <- base::gsub("`", "", id_col,     fixed=TRUE)
@@ -904,37 +906,24 @@ build_diff_sql_filtered <- function(con, table, id_col, label_cols, meta, diff_m
 
   label_cols_plus <- base::c(label_cols, "Date Added")
 
-  unions_sql <- build_unions(con, diff_map, id_col, label_cols_plus, meta, ctx_map)
-
-  # Added/Removed select lists use NULL for all diff columns
-  diff_nulls_vec <- vapply(base::unname(diff_map), function(alias) {
-    base::sprintf('NULL AS %s', sql_ident(con, alias))
-  }, character(1L))
-
-  # Rebuild label/meta/ctx vectors for added/removed
-  labels_vec <- vapply(label_cols_plus, function(col) {
-    if (col == "Date Added") base::sprintf('base."%s" AS "%s"', col, col)
-    else                     base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "%1$s"', col)
-  }, character(1L))
-  meta_vec <- base::c(
-    if (base::is.null(meta[["url"]]))        'NULL AS "URL"'        else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "URL"',        meta[["url"]]),
-    if (base::is.null(meta[["acronym"]]))    'NULL AS "Acronym"'    else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Acronym"',    meta[["acronym"]]),
-    if (base::is.null(meta[["title"]]))      'NULL AS "Title"'      else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Title"',      meta[["title"]]),
-    if (base::is.null(meta[["condition"]]))  'NULL AS "Condition"'  else base::sprintf('COALESCE(n."%1$s", o."%1$s") AS "Condition"',  meta[["condition"]])
-  )
-  ctx_n_vec <- if (!base::length(ctx_map)) character(0) else
-    vapply(base::names(ctx_map), function(k) base::sprintf('n."%s" AS "%s"', k, base::unname(ctx_map[[k]])), character(1L))
-  ctx_o_vec <- if (!base::length(ctx_map)) character(0) else
-    vapply(base::names(ctx_map), function(k) base::sprintf('o."%s" AS "%s"', k, base::unname(ctx_map[[k]])), character(1L))
-
-  select_added   <- collapse_select(base::c(labels_vec, meta_vec, diff_nulls_vec, ctx_n_vec))
-  select_removed <- collapse_select(base::c(labels_vec, meta_vec, diff_nulls_vec, ctx_o_vec))
-
-  join_base <- base::switch(
+  join_ids <- base::switch(
     table,
     "NIHR" = 'ON REPLACE(REPLACE(t."project_id","-",""),"/","") = ids."id_norm"',
     base::sprintf('USING("%s")', id_col)
   )
+
+  unions_sql <- build_unions(con, diff_map, id_col, label_cols_plus, meta, ctx_map)
+
+  # Added/Removed projections (diffs are NULLs)
+  diff_nulls_vec <- vapply(base::unname(diff_map), function(alias) {
+    base::sprintf('NULL AS %s', sql_ident(con, alias))
+  }, character(1L))
+  labels_vec <- build_labels_vec(label_cols_plus)
+  meta_vec   <- build_meta_vec(meta)
+  ctx_n_vec  <- build_ctx_vec(ctx_map, "n")
+  ctx_o_vec  <- build_ctx_vec(ctx_map, "o")
+  select_added   <- collapse_select(base::c(labels_vec, meta_vec, diff_nulls_vec, ctx_n_vec))
+  select_removed <- collapse_select(base::c(labels_vec, meta_vec, diff_nulls_vec, ctx_o_vec))
 
   id_q <- sql_ident(con, id_col)
 
@@ -945,7 +934,7 @@ WITH
   base_src AS (
     SELECT t.*
     FROM {`table`} t
-    JOIN ids {DBI::SQL(join_base)}
+    JOIN ids {DBI::SQL(join_ids)}
   ),
   n_rank AS (
     SELECT base_src.*,
@@ -964,18 +953,6 @@ WITH
     SELECT {DBI::SQL(base::sprintf('\"%s\"', id_col))}, DATE(MIN(\"Query_Date\")) AS \"Date Added\"
     FROM base_src
     GROUP BY {DBI::SQL(base::sprintf('\"%s\"', id_col))}
-  ),
-  base AS (
-    SELECT fs.\"Date Added\", n.*, o.*
-    FROM n
-    LEFT JOIN o  USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
-    LEFT JOIN first_seen fs USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
-    UNION ALL
-    SELECT fs.\"Date Added\", n.*, o.*
-    FROM o
-    LEFT JOIN n USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
-    LEFT JOIN first_seen fs USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
-    WHERE n.{DBI::SQL(base::sprintf('\"%s\"', id_col))} IS NULL
   )
 {sql_raw(unions_sql)}
 
@@ -984,7 +961,9 @@ SELECT '+' AS Change, 'Added' AS \"Changed Field\",
        {sql_raw(select_added)},
        DATE(n.\"Query_Date\") AS \"When\",
        n.{DBI::SQL(base::sprintf('\"%s\"', id_col))} AS {DBI::SQL(base::sprintf('\"%s\"', id_col))}
-FROM base
+FROM n
+LEFT JOIN o USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
+LEFT JOIN first_seen fs USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
 WHERE o.{DBI::SQL(base::sprintf('\"%s\"', id_col))} IS NULL
 
 UNION ALL
@@ -992,15 +971,16 @@ SELECT '-' AS Change, 'Removed' AS \"Changed Field\",
        {sql_raw(select_removed)},
        DATE(o.\"Query_Date\") AS \"When\",
        o.{DBI::SQL(base::sprintf('\"%s\"', id_col))} AS {DBI::SQL(base::sprintf('\"%s\"', id_col))}
-FROM base
+FROM o
+LEFT JOIN n USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
+LEFT JOIN first_seen fs USING({DBI::SQL(base::sprintf('\"%s\"', id_col))})
 WHERE n.{DBI::SQL(base::sprintf('\"%s\"', id_col))} IS NULL
 
 ORDER BY \"When\" DESC, {DBI::SQL(base::sprintf('\"%s\"', id_col))};
 ",
     cutoff_date = cutoff_date,
     .con = con
-  ) |>
-    base::as.character()
+  ) |> base::as.character()
 }
 
 # ---------- Exec wrappers ----------
