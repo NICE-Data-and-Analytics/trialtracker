@@ -439,6 +439,24 @@ Row {.tabset .tabset-fade}
 
 ```{r CG.govarchive, echo=FALSE}
 
+# DRY renderer for archive tables
+archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
+  # rename_map: named character vector c("New Name" = "old_name", ...)
+  rename_quos <- rlang::set_names(rlang::syms(unname(rename_map)), names(rename_map))
+
+  DBI::dbReadTable(pool, table) |>
+    dplyr::select(-dplyr::any_of(drop_cols)) |>
+    dplyr::mutate(
+      dplyr::across(.cols = dplyr::everything(), .fns = clean_utf8),
+      `Archive Date` = lubridate::as_date(base::as.numeric(.data[["Query_Date"]]))
+    ) |>
+    dplyr::select(-dplyr::any_of("Query_Date")) |>
+    dplyr::select(`Archive Date`, dplyr::everything()) |>
+    dplyr::rename(!!!rename_quos) |>
+    dplyr::distinct() |>
+    DT::datatable(options = base::list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+}
+
 archive_dt(
   pool   = pool_con,
   table  = "NCT_rxv",
@@ -1291,28 +1309,6 @@ output$pubmed_nct    <- DT::renderDT(run_pubmed("NCT"),    options = dt_opts_cli
 output$pubmed_isrctn <- DT::renderDT(run_pubmed("ISRCTN"), options = dt_opts_client, server = FALSE, filter = "top")
 output$pubmed_nihr   <- DT::renderDT(run_pubmed("NIHR"),   options = dt_opts_client, server = FALSE, filter = "top")
 output$pubmed_eu     <- DT::renderDT(run_pubmed("EU"),     options = dt_opts_client, server = FALSE, filter = "top")
-```
-
-```{r ServerArchive, context = "server", echo = FALSE}
-
-# DRY renderer for archive tables
-archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
-  # rename_map: named character vector c("New Name" = "old_name", ...)
-  rename_quos <- rlang::set_names(rlang::syms(unname(rename_map)), names(rename_map))
-
-  DBI::dbReadTable(pool, table) |>
-    dplyr::select(-dplyr::any_of(drop_cols)) |>
-    dplyr::mutate(
-      dplyr::across(.cols = dplyr::everything(), .fns = clean_utf8),
-      `Archive Date` = lubridate::as_date(base::as.numeric(.data[["Query_Date"]]))
-    ) |>
-    dplyr::select(-dplyr::any_of("Query_Date")) |>
-    dplyr::select(`Archive Date`, dplyr::everything()) |>
-    dplyr::rename(!!!rename_quos) |>
-    dplyr::distinct() |>
-    DT::datatable(options = base::list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
-}
-
 ```
 
 ```{r ServerUserInteractions, context = "server", echo = FALSE}
