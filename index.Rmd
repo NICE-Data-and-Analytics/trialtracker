@@ -437,113 +437,89 @@ Row {.tabset .tabset-fade}
 
 ### ClinicalTrials.gov Archive
 
-```{r CG.govarchive}
+```{r CG.govarchive, echo=FALSE}
 
-DBI::dbReadTable(pool_con, "NCT_rxv") |>
-  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
-    `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
-  ) |>
-  dplyr::select(
-    -SeeAlsoLinkURL,
-    -Query_Date
-  ) |>
-  dplyr::select(`Archive Date`,
-    everything(),
-    `Archiving Comments` = Archiving_Comments
-  ) |>
-  dplyr::rename(
-    "Guideline" = Guideline.number,
-    `NCT ID` = NCTId,
-    `Org Study ID` = OrgStudyId,
-    Title = BriefTitle,
-    Status = OverallStatus,
-    `Primary Completion Date` = PrimaryCompletionDate,
-    `Completion Date` = CompletionDate,
-    `Results Submit Date` = ResultsFirstSubmitDate,
-    `Results Post Date` = ResultsFirstPostDate,
-    `Last Update` = LastUpdatePostDate
-  ) |>
-  dplyr::distinct() |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+archive_dt(
+  pool   = pool_con,
+  table  = "NCT_rxv",
+  drop_cols = c("SeeAlsoLinkURL"),
+  rename_map = c(
+    "Guideline"                  = "Guideline.number",
+    "NCT ID"                     = "NCTId",
+    "Org Study ID"               = "OrgStudyId",
+    "Title"                      = "BriefTitle",
+    "Status"                     = "OverallStatus",
+    "Primary Completion Date"    = "PrimaryCompletionDate",
+    "Completion Date"            = "CompletionDate",
+    "Results Submit Date"        = "ResultsFirstSubmitDate",
+    "Results Post Date"          = "ResultsFirstPostDate",
+    "Last Update"                = "LastUpdatePostDate",
+    "Archiving Comments"         = "Archiving_Comments"
+  )
+)
 ```
 
 ### ISRCTN Archive
 
-```{r ISRCTNarchivetable}
+```{r ISRCTNarchivetable, echo=FALSE}
 
-DBI::dbReadTable(pool_con, "ISRCTN_rxv") |>
-  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
-    `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
-  ) |>
-  dplyr::select(-Query_Date) |>
-  dplyr::select(
-    `Archive Date`,
-    everything()
-  ) |>
-  dplyr::rename(
-    "Program or Guideline" = Guideline.number,
-    `ISRCTN ID` = ISRCTN_No,
-    Title = Public_Title,
-    `Scientific Title` = Scientific_Title,
-    `Recruitment Status` = Recruitment_Status,
-    `Results completed date` = Results_date_completed,
-    `Results URL` = Results_url_link,
-    `Results summary` = Results_summary,
-    `Results posted date` = Results_date_posted,
-    `Results published date` = Results_date_first_publication,
-    `Archiving Comments` = Archiving_Comments
-  ) |>
-  dplyr::distinct() |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+archive_dt(
+  pool   = pool_con,
+  table  = "ISRCTN_rxv",
+  rename_map = c(
+    "Program or Guideline"       = "Guideline.number",
+    "ISRCTN ID"                  = "ISRCTN_No",
+    "Title"                      = "Public_Title",
+    "Scientific Title"           = "Scientific_Title",
+    "Recruitment Status"         = "Recruitment_Status",
+    "Results completed date"     = "Results_date_completed",
+    "Results URL"                = "Results_url_link",
+    "Results summary"            = "Results_summary",
+    "Results posted date"        = "Results_date_posted",
+    "Results published date"     = "Results_date_first_publication",
+    "Archiving Comments"         = "Archiving_Comments"
+  )
+)
 
 ```
 
 ### NIHR Archive
 
-```{r NIHRarchivetable}
-
-DBI::dbReadTable(pool_con, "NIHR_rxv") |>
-  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
-    `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
-  ) |>
-  dplyr::select(-Query_Date) |>
-  dplyr::select(
-    `Archive Date`,
-    everything()
-  ) |>
-  dplyr::rename(
-    "Program or Guideline" = Guideline.number,
-    `NIHR ID` = project_id,
-    `Project Title` = project_title,
-    Status = project_status,
-    `End Date` = end_date,
-    `Archiving Comments` = Archiving_Comments
-  ) |>
-  dplyr::distinct() |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+```{r NIHRarchivetable, echo=FALSE}
+archive_dt(
+  pool   = pool_con,
+  table  = "NIHR_rxv",
+  rename_map = c(
+    "Program or Guideline"       = "Guideline.number",
+    "NIHR ID"                    = "project_id",
+    "Project Title"              = "project_title",
+    "Status"                     = "project_status",
+    "End Date"                   = "end_date",
+    "Archiving Comments"         = "Archiving_Comments"
+  )
+)
 ```
 
 ### EU Archive
 
-```{r EUarchivetable}
-
-DBI::dbReadTable(pool_con, "EU_rxv") |>
-  dplyr::select(-a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language, -EU_Ids) |>
-  dplyr::mutate(across(.cols = everything(), .fns = clean_utf8),
-    `Archive Date` = lubridate::as_date(as.numeric(Query_Date))
-  ) |>
-  dplyr::select(-Query_Date) |>
-  dplyr::rename(
-    "Program or Guideline" = Guideline.number,
-    `Clinicaltrials.eu ID` = `X_id`,
-    `End of Trial Status` = p_end_of_trial_status,
-    Title = a3_full_title_of_the_trial,
-    `Abbreviated Title` = a32_name_or_abbreviated_title_of_the_trial_where_available,
-    `Sponsor ID` = a41_sponsors_protocol_code_number,
-    `Archiving Comments` = Archiving_Comments
-  ) |>
-  dplyr::distinct() |>
-  DT::datatable(options = list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+```{r EUarchivetable, echo=FALSE}
+archive_dt(
+  pool   = pool_con,
+  table  = "EU_rxv",
+  drop_cols = c(
+    "a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language",
+    "EU_Ids"
+  ),
+  rename_map = c(
+    "Program or Guideline"       = "Guideline.number",
+    "Clinicaltrials.eu ID"       = "X_id",
+    "End of Trial Status"        = "p_end_of_trial_status",
+    "Title"                      = "a3_full_title_of_the_trial",
+    "Abbreviated Title"          = "a32_name_or_abbreviated_title_of_the_trial_where_available",
+    "Sponsor ID"                 = "a41_sponsors_protocol_code_number",
+    "Archiving Comments"         = "Archiving_Comments"
+  )
+)
 ```
 
 ```{r ServerCodeUpdates, context = "server", echo = FALSE}
@@ -1254,50 +1230,88 @@ output$no_change_cteu <- DT::renderDT({
 
 ```{r ServerPubMed, context = "server", echo = FALSE}
 
-render_pubmed_table <- function(df) {
-  if (!base::nrow(df)) return(df)
-  out <- df |>
-    dplyr::mutate(
-      dplyr::across(where(base::is.character), ~ base::enc2utf8(base::as.character(.x))),
-      Query_Date   = base::suppressWarnings(base::as.Date(.data[["Query_Date"]])),
-      `Query Date` = base::format(.data[["Query_Date"]], "%Y/%m/%d"),
-      Abstract     = (function(x, n = 200L) { x <- base::as.character(x); i <- base::nchar(x) > n; x[i] <- base::paste0(base::substr(x[i], 1L, n), "…"); x })(.data[["abstract"]])
-    ) |>
-    dplyr::rename(
-      Guideline       = .data[["Guideline.number"]],
-      `Trial ID`      = .data[["ID"]],
-      `Publication DOI` = .data[["doi"]],
-      Title           = .data[["title"]],
-      Journal         = .data[["jabbrv"]],
-      Condition       = .data[["Short..working.title."]]
-    )
+# --- Build SQL for a registry's PubMed table (no Trial_Ids filtering) ---
+pubmed_sql <- function(con, reg) {
+  # Table names assumed: "NCT_PM", "ISRCTN_PM", "NIHR_PM", "EU_PM"
+  pm_tbl <- paste0(toupper(reg), "_PM")
 
-  sel_front(out, c(
-    "Program","Guideline","Query Date","Trial ID","pmid","Publication DOI","Title","Abstract","Journal","Condition"
-  )) |> dplyr::distinct()
+  # Select columns in final display order; formatting handled in R
+  glue::glue_sql(
+    '
+SELECT
+  p."Program"                AS "Program",
+  p."Guideline.number"       AS "Guideline",
+  p."Query_Date"             AS "Query_Date",
+  p."ID"                     AS "Trial ID",
+  p."pmid"                   AS "pmid",
+  p."doi"                    AS "Publication DOI",
+  p."title"                  AS "Title",
+  p."abstract"               AS "Abstract",
+  p."jabbrv"                 AS "Journal",
+  p."Short..working.title."  AS "Condition"
+FROM {`pm_tbl`} p
+ORDER BY p."Query_Date" DESC, p."pmid";
+', .con = con) |> base::as.character()
 }
 
-# Cache the data frames not renderers
-pubmed_nct_df <- shiny::reactive({
-  render_pubmed_table(raw_tables()[["NCT_PM"]])
-}) |> shiny::bindCache(mtime_reader())
+# --- Small formatters (UTF-8, date, abstract truncation) ---
+coerce_pm_date <- function(x) {
+  num <- base::suppressWarnings(base::as.numeric(x))
+  d   <- base::ifelse(base::is.finite(num), num, NA_real_)
+  base::as.Date(d, origin = "1970-01-01")
+}
+truncate_str <- function(x, n = 200L) {
+  x <- base::as.character(x)
+  i <- base::nchar(x) > n
+  x[i] <- base::paste0(base::substr(x[i], 1L, n), "…")
+  x
+}
 
-pubmed_isr_df <- shiny::reactive({
-  render_pubmed_table(raw_tables()[["ISRCTN_PM"]])
-}) |> shiny::bindCache(mtime_reader())
+# --- Execute + tidy for a given registry ---
+run_pubmed <- function(reg) {
+  sql <- pubmed_sql(pool_con, reg)
+  df  <- DBI::dbGetQuery(pool_con, sql)
+  if (!base::nrow(df)) base::return(df)
 
-pubmed_nihr_df <- shiny::reactive({
-  render_pubmed_table(raw_tables()[["NIHR_PM"]])
-}) |> shiny::bindCache(mtime_reader())
+  df |>
+    dplyr::mutate(
+      dplyr::across(where(base::is.character), ~ base::enc2utf8(base::as.character(.x))),
+      `Query Date` = base::format(coerce_pm_date(.data[["Query_Date"]]), "%Y/%m/%d"),
+      Abstract     = truncate_str(.data[["Abstract"]], 200L)
+    ) |>
+    dplyr::select(
+      "Program","Guideline","Query Date","Trial ID","pmid",
+      "Publication DOI","Title","Abstract","Journal","Condition"
+    ) |>
+    dplyr::distinct()
+}
 
-pubmed_eu_df <- shiny::reactive({
-  render_pubmed_table(raw_tables()[["EU_PM"]])
-}) |> shiny::bindCache(mtime_reader())
+# --- Outputs (client-side DT) ---
+output$pubmed_nct    <- DT::renderDT(run_pubmed("NCT"),    options = dt_opts_client, server = FALSE, filter = "top")
+output$pubmed_isrctn <- DT::renderDT(run_pubmed("ISRCTN"), options = dt_opts_client, server = FALSE, filter = "top")
+output$pubmed_nihr   <- DT::renderDT(run_pubmed("NIHR"),   options = dt_opts_client, server = FALSE, filter = "top")
+output$pubmed_eu     <- DT::renderDT(run_pubmed("EU"),     options = dt_opts_client, server = FALSE, filter = "top")
+```
 
-output$pubmed_nct    <- DT::renderDT(pubmed_nct_df(),  options = dt_opts_client, server = FALSE, filter = "top")
-output$pubmed_isrctn <- DT::renderDT(pubmed_isr_df(),  options = dt_opts_client, server = FALSE, filter = "top")
-output$pubmed_nihr   <- DT::renderDT(pubmed_nihr_df(), options = dt_opts_client, server = FALSE, filter = "top")
-output$pubmed_eu     <- DT::renderDT(pubmed_eu_df(),   options = dt_opts_client, server = FALSE, filter = "top")
+```{r ServerArchive, context = "server", echo = FALSE}
+
+# DRY renderer for archive tables
+archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
+  # rename_map: named character vector c("New Name" = "old_name", ...)
+  rename_quos <- rlang::set_names(rlang::syms(unname(rename_map)), names(rename_map))
+
+  DBI::dbReadTable(pool, table) |>
+    dplyr::select(-dplyr::any_of(drop_cols)) |>
+    dplyr::mutate(
+      dplyr::across(.cols = dplyr::everything(), .fns = clean_utf8),
+      `Archive Date` = lubridate::as_date(base::as.numeric(.data[["Query_Date"]]))
+    ) |>
+    dplyr::select(-dplyr::any_of("Query_Date")) |>
+    dplyr::select(`Archive Date`, dplyr::everything()) |>
+    dplyr::rename(!!!rename_quos) |>
+    dplyr::distinct() |>
+    DT::datatable(options = base::list(bPaginate = FALSE, scrollY = TRUE), filter = "top")
+}
 
 ```
 
