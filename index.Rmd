@@ -785,18 +785,13 @@ output$live_trial_table_eu <- DT::renderDT({
 ```
 
 ```{r ServerRecentStatusChanges, context="server", echo=FALSE}
-library(DBI)
-library(dplyr)
-library(lubridate)
-library(glue)
-
 # --- shared ---
 cutoff_date <- Sys.Date() - 31L
 cutoff_str  <- format(cutoff_date, "%Y-%m-%d")
 
 # Tiny helper: emits the common CTEs for any table
 with_scaffold <- function(source_table, id_col, ids_source_col, cutoff_iso, ids_table = "Trial_Ids") {
-  glue::glue('
+  glue::glue_sql('
 ids AS (
   SELECT DISTINCT TRIM("{ids_source_col}") AS "{id_col}"
   FROM "{ids_table}"
@@ -824,7 +819,7 @@ o AS (
 # =========================
 # NCT (ClinicalTrialsGov)
 # =========================
-nct_sql <- glue('
+nct_sql <- glue::glue_sql('
 WITH
 {with_scaffold("NCT", "NCTId", "NCT_Ids", cutoff_str)},
 diffs AS (
@@ -876,7 +871,7 @@ SELECT
   CASE WHEN ("Status__changed" + "Completion Date__changed" + "Last Update Date__changed") > 0 THEN "Yes" ELSE "No" END AS "Change",
   RTRIM((CASE WHEN "Status__changed" = 1 THEN "Status" ELSE "" END) ||
     (CASE WHEN "Completion Date__changed" = 1  THEN "Completion Date"  ELSE "" END) ||
-    (CASE WHEN "Last Update Date__changed" = 1 THEN "Last Update Date" ELSE "" END)) AS "Changed Field",
+    (CASE WHEN "Last Update Date__changed" = 1 THEN "Last Update Date" ELSE "" END), ", ") AS "Changed Field",
   "Program","Guideline.number","Date Added","URL","NCTId","Acronym","Title","Condition","Status","Completion Date","Results Submit Date","Last Update Date"
 FROM diffs
 ORDER BY "When" DESC, "NCTId";
@@ -885,7 +880,7 @@ ORDER BY "When" DESC, "NCTId";
 # =========================
 # ISRCTN
 # =========================
-isrctn_sql <- glue('
+isrctn_sql <- glue::glue_sql('
 WITH
 {with_scaffold("ISRCTN", "ISRCTN_No", "ISRCTN_Ids", cutoff_str)},
 diffs AS (
@@ -948,7 +943,7 @@ SELECT
     (CASE WHEN "Results Summary__changed"    = 1 THEN "Results Summary, "    ELSE "" END) ||
     (CASE WHEN "Results Completed__changed"  = 1 THEN "Results Completed, "  ELSE "" END) ||
     (CASE WHEN "Results Posted__changed"     = 1 THEN "Results Posted, "     ELSE "" END) ||
-    (CASE WHEN "Results Published__changed"  = 1 THEN "Results Published, "  ELSE "" END)) AS "Changed Field",
+    (CASE WHEN "Results Published__changed"  = 1 THEN "Results Published, "  ELSE "" END), ", ") AS "Changed Field",
   "Program","Guideline.number","Date Added","URL","ISRCTN_No","Acronym","Title","Recruitment Status","Results URL","Results Summary","Results Completed","Results Posted","Results Published"
 FROM diffs
 ORDER BY "When" DESC, "ISRCTN_No";
@@ -957,7 +952,7 @@ ORDER BY "When" DESC, "ISRCTN_No";
 # =========================
 # NIHR
 # =========================
-nihr_sql <- glue('
+nihr_sql <- glue::glue_sql('
 WITH
 {with_scaffold("NIHR", "project_id", "NIHR_Ids", cutoff_str)},
 diffs AS (
@@ -997,7 +992,7 @@ diffs AS (
 SELECT
   CASE WHEN ("Status__changed" + "End Date__changed") > 0 THEN "Yes" ELSE "No" END AS "Change",
   RTRIM((CASE WHEN "Status__changed"   = 1 THEN "Status, "   ELSE "" END) ||
-    (CASE WHEN "End Date__changed" = 1 THEN "End Date, " ELSE "" END)) AS "Changed Field",
+    (CASE WHEN "End Date__changed" = 1 THEN "End Date, " ELSE "" END), ", ") AS "Changed Field",
   "Program","Guideline.number","Date Added","URL","project_id","Title","Status","End Date"
 FROM diffs
 ORDER BY "When" DESC, "project_id";
@@ -1006,7 +1001,7 @@ ORDER BY "When" DESC, "project_id";
 # =========================
 # ClinicalTrialsEU
 # =========================
-eu_sql <- glue('
+eu_sql <- glue::glue_sql('
 WITH
 {with_scaffold("EU", "EU_Ids", "ClinicalTrialsEU_Ids", cutoff_str)},
 diffs AS (
@@ -1045,7 +1040,7 @@ diffs AS (
 )
 SELECT
   CASE WHEN ("End of Trial Status__changed") > 0 THEN "Yes" ELSE "No" END AS "Change",
-  RTRIM((CASE WHEN "End of Trial Status__changed" = 1 THEN "End of Trial Status" ELSE "" END)) AS "Changed Field",
+  RTRIM((CASE WHEN "End of Trial Status__changed" = 1 THEN "End of Trial Status" ELSE "" END), ", ") AS "Changed Field",
   "Program","Guideline.number","Date Added","URL","EU_Ids","End of Trial Status","Acronym","Title"
 FROM diffs
 ORDER BY "When" DESC, "EU_Ids";
