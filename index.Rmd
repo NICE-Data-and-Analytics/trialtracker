@@ -60,7 +60,19 @@ if (!is.na(db_path_abs) && nzchar(db_path_abs)) {
   log_msg("DB path not found:", db_path)
 }
 
-# ---- safe DB helpers ----
+# Regex patterns
+NCT_pattern    <- "^NCT[0-9]{8}$"
+EU_pattern     <- "^[0-9]{4}-[0-9]{6}-[0-9]{2}$"
+ISRCTN_pattern <- "^ISRCTN[0-9]{8}$"
+NIHR_pattern   <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})"
+
+# DT options (server for big tables; client for smaller PubMed tables)
+dt_opts_server <- list(pageLength = 50L, lengthMenu = c(25L, 50L, 100L), deferRender = TRUE, processing = TRUE, searchDelay = 400, dom = "tip")
+dt_opts_client <- list(pageLength = 25L, dom = "tip")
+
+# Helper functions
+
+# safe DB query
 safe_db_getquery <- function(con, sql, label) {
   if (is.null(con)) {
     msg <- paste0(label, ": no DB connection")
@@ -82,15 +94,6 @@ safe_db_getquery <- function(con, sql, label) {
   )
 }
 
-
-# Helpers
-
-# Regex patterns
-NCT_pattern    <- "^NCT[0-9]{8}$"
-EU_pattern     <- "^[0-9]{4}-[0-9]{6}-[0-9]{2}$"
-ISRCTN_pattern <- "^ISRCTN[0-9]{8}$"
-NIHR_pattern   <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})"
-
 # Convert a character vector to UTF-8 encoding. This is a
 # minimal and vectorized way to clean up character data before
 # storing it in the database or displaying it in the UI.
@@ -101,7 +104,7 @@ fast_trunc <- function(x, n = 120L) {                      # UI-only truncation,
   x[i] <- paste0(substr(x[i], 1L, n), "…"); x
 }
 
-clean_text <- function(x) {
+clean_text_pubmed <- function(x) {
   if (is.factor(x)) x <- as.character(x)
   if (!is.character(x)) return(x)
 
@@ -118,20 +121,13 @@ clean_text <- function(x) {
   x2 <- stringi::stri_replace_all_regex(x2, "[\\p{Cf}\\p{Cc}]", "")
   x2
 }
-
-# # DT options (server for big tables; client for smaller PubMed tables)
-dt_opts_server <- list(pageLength = 25L, lengthMenu = c(25L, 50L, 100L), deferRender = TRUE, processing = TRUE, searchDelay = 400, dom = "tip")
-dt_opts_client <- list(pageLength = 25L, dom = "tip")
-
 ```
 
 ```{r setup, context="server", echo=FALSE, include=FALSE}
 
+# Logging
 options(shiny.sanitize.errors = FALSE)
 options(shiny.fullstacktrace = TRUE)
-
-# IMPORTANT: Shiny may call shiny.error() with NO args.
-# So this MUST be function() (no required parameters).
 options(shiny.error = function() {
   # geterrmessage() is a character string; safe to log
   msg <- tryCatch(geterrmessage(), error = function(e) "<could not read geterrmessage()>")
@@ -151,10 +147,17 @@ shiny::onStop(function() {
   }, silent = TRUE)
 })
 
-# Cache invalidation token (manual)
-cache_last_refreshed <- shiny::reactiveVal(Sys.time())
-invalidate_cache <- function() cache_last_refreshed(Sys.time())
-
+# Update reactive - this changes when the database file changes which is the trigger to update various tables
+db_mtime <- shiny::reactivePoll(
+  intervalMillis = 2000,
+  session = session,
+  checkFunc = function() {
+    as.numeric(file.info(db_path_abs)$mtime)
+  },
+  valueFunc = function() {
+    file.info(db_path_abs)$mtime
+  }
+)
 ```
 
 ```{css, echo=FALSE}
@@ -503,121 +506,24 @@ Row {.tabset .tabset-fade}
 ### ClinicalTrials.gov Archive
 
 ```{r CG.govarchive, echo=FALSE}
-
-# DRY renderer for archive tables
-archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
-
-  if (!DBI::dbIsValid(pool)) {
-    log_msg("archive_dt:", table, "pool invalid")
-    return(DT::datatable(data.frame(Message = "Database connection not valid")))
-  }
-
-  if (!DBI::dbExistsTable(pool, table)) {
-    log_msg("archive_dt:", table, "table missing")
-    return(DT::datatable(data.frame(Message = paste("No archive table found:", table))))
-  }
-
-  tryCatch({
-    rename_quos <- rlang::set_names(rlang::syms(unname(rename_map)), names(rename_map))
-
-    DBI::dbReadTable(pool, table) |>
-      dplyr::select(-dplyr::any_of(drop_cols)) |>
-      dplyr::mutate(
-        dplyr::across(.cols = dplyr::everything(), .fns = clean_utf8),
-        `Archive Date` = lubridate::as_date(as.numeric(.data[["Query_Date"]]))
-      ) |>
-      dplyr::select(-dplyr::any_of("Query_Date")) |>
-      dplyr::select(`Archive Date`, dplyr::everything()) |>
-      dplyr::rename(!!!rename_quos) |>
-      dplyr::distinct() |>
-      DT::datatable(options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
-
-  }, error = function(e) {
-    log_msg("archive_dt ERROR in", table, ":", conditionMessage(e))
-    DT::datatable(data.frame(Error = conditionMessage(e)))
-  })
-}
-
-archive_dt(
-  pool   = pool_con,
-  table  = "NCT_rxv",
-  drop_cols = c("SeeAlsoLinkURL"),
-  rename_map = c(
-    "Guideline"                  = "Guideline.number",
-    "NCT ID"                     = "NCTId",
-    "Org Study ID"               = "OrgStudyId",
-    "Title"                      = "BriefTitle",
-    "Status"                     = "OverallStatus",
-    "Primary Completion Date"    = "PrimaryCompletionDate",
-    "Completion Date"            = "CompletionDate",
-    "Results Submit Date"        = "ResultsFirstSubmitDate",
-    "Results Post Date"          = "ResultsFirstPostDate",
-    "Last Update"                = "LastUpdatePostDate",
-    "Archiving Comments"         = "Archiving_Comments"
-  )
-)
+DT::DTOutput("archive_nct")
 ```
 
 ### ISRCTN Archive
 
 ```{r ISRCTNarchivetable, echo=FALSE}
-
-archive_dt(
-  pool   = pool_con,
-  table  = "ISRCTN_rxv",
-  rename_map = c(
-    "Program or Guideline"       = "Guideline.number",
-    "ISRCTN ID"                  = "ISRCTN_No",
-    "Title"                      = "Public_Title",
-    "Scientific Title"           = "Scientific_Title",
-    "Recruitment Status"         = "Recruitment_Status",
-    "Results completed date"     = "Results_date_completed",
-    "Results URL"                = "Results_url_link",
-    "Results summary"            = "Results_summary",
-    "Results posted date"        = "Results_date_posted",
-    "Results published date"     = "Results_date_first_publication",
-    "Archiving Comments"         = "Archiving_Comments"
-  )
-)
-
+DT::DTOutput("archive_isrctn")
 ```
 
 ### NIHR Archive
 
 ```{r NIHRarchivetable, echo=FALSE}
-archive_dt(
-  pool   = pool_con,
-  table  = "NIHR_rxv",
-  rename_map = c(
-    "Program or Guideline"       = "Guideline.number",
-    "NIHR ID"                    = "project_id",
-    "Project Title"              = "project_title",
-    "Status"                     = "project_status",
-    "End Date"                   = "end_date",
-    "Archiving Comments"         = "Archiving_Comments"
-  )
-)
+DT::DTOutput("archive_nihr")
 ```
 
 ### EU Archive
 ```{r EUarchivetable, echo=FALSE}
-archive_dt(
-  pool   = pool_con,
-  table  = "EU_rxv",
-  drop_cols = c(
-    "a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language",
-    "EU_Ids"
-  ),
-  rename_map = c(
-    "Program or Guideline"       = "Guideline.number",
-    "Clinicaltrials.eu ID"       = "X_id",
-    "End of Trial Status"        = "p_end_of_trial_status",
-    "Title"                      = "a3_full_title_of_the_trial",
-    "Abbreviated Title"          = "a32_name_or_abbreviated_title_of_the_trial_where_available",
-    "Sponsor ID"                 = "a41_sponsors_protocol_code_number",
-    "Archiving Comments"         = "Archiving_Comments"
-  )
-)
+DT::DTOutput("archive_eu")
 ```
 
 ```{r ServerCodeUpdates, context = "server", echo = FALSE}
@@ -625,7 +531,7 @@ archive_dt(
 # Helper to render a "last refreshed" string into a given output ID
 render_last_refreshed <- function(id) {
   output[[id]] <- shiny::renderText({
-    ts <- cache_last_refreshed()
+    ts <- db_mtime()
     if (is.na(ts)) return("🔄 Unknown")
     utc <- format(ts, "%Y-%m-%d %H:%M", tz = "UTC")
     paste0("🔄 Last refreshed at: ", utc, " UTC")
@@ -636,17 +542,6 @@ render_last_refreshed <- function(id) {
 render_last_refreshed("last_refreshed_txt_live")
 render_last_refreshed("last_refreshed_txt_recent")
 render_last_refreshed("last_refreshed_txt_nochg")
-render_last_refreshed("last_refreshed_txt_pub")
-
-# Central refresh function
-refresh_all_data <- function() {
-  
-  #Call Update Script
-  trialtracker::download_trial_info_wrapper_no_pm_or_email()
-
-  # UI to see the new mtime
-  invalidate_cache()
-}
 
 ```
 
@@ -701,6 +596,7 @@ ORDER BY \"Date Added\" DESC, \"NCT ID\";
 
 # --- Execute inside renderDT (reactivity stays here) ---
 output$live_trial_table_nct <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   sql <- nct_latest_sql_from_trial_ids(pool_con)
   df  <- safe_db_getquery(pool_con, sql, "live_trial_table_nct")
   if ("Error" %in% names(df)) return(df)
@@ -756,6 +652,7 @@ ORDER BY \"Date Added\" DESC, \"ISRCTN ID\";
 
 # --- Execute inside renderDT (reactivity happens here) ---
 output$live_trial_table_isrctn <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   sql <- isr_latest_sql_from_trial_ids(pool_con)
   df  <- safe_db_getquery(pool_con, sql, label = "live_trial_table_isrctn")
   if ("Error" %in% names(df)) return(df)
@@ -808,6 +705,7 @@ ORDER BY \"Date Added\" DESC, \"NIHR ID\";
 
 # --- Execute inside renderDT (reactivity here) ---
 output$live_trial_table_nihr <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   sql <- nihr_latest_sql_from_trial_ids(pool_con)
   df  <- safe_db_getquery(pool_con, sql, label = "live_trial_table_nihr")
   if ("Error" %in% names(df)) return(df)
@@ -858,6 +756,7 @@ ORDER BY \"Date Added\" DESC, \"Clinicaltrials.eu ID\";
 
 # --- Execute inside renderDT (reactivity here; no sel_front needed) ---
 output$live_trial_table_eu <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   sql <- eu_latest_sql_from_trial_ids(pool_con)
   df  <- safe_db_getquery(pool_con, sql, label = "live_trial_table_eu")
   if ("Error" %in% names(df)) return(df)
@@ -1116,6 +1015,7 @@ render_nct <- function(sql_text) {
   keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","NCT ID","Acronym","Title","Condition","Status","Completion Date","Results Submit Date","Last Update Date")
 
   DT::renderDT({
+    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
     df <- safe_db_getquery(pool_con, sql_text, label = "render_nct")
     if ("Error" %in% names(df)) return(df)
     if (!nrow(df)) return(df)
@@ -1129,10 +1029,9 @@ render_nct <- function(sql_text) {
         `Last Update Date` = suppressWarnings(lubridate::ymd(`Last Update Date`)),
         `Results Submit Date` = suppressWarnings(lubridate::ymd(`Results Submit Date`))
       ) |>
-      dplyr::select(dplyr::all_of(keep_cols)) |>
-      dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top") #|>
-    #shiny::bindEvent(cache_last_refreshed())
+      dplyr::select(dplyr::all_of(keep_cols)) #|>
+      # dplyr::distinct()
+  }, options = dt_opts_server, server = TRUE, filter = "top")
 }
 
 render_isrctn <- function(sql_text) {
@@ -1140,6 +1039,7 @@ render_isrctn <- function(sql_text) {
   keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","ISRCTN","Acronym","Title","Recruitment Status","Results URL","Results Summary","Results Completed","Results Posted","Results Published")
   
   DT::renderDT({
+    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
     df <- safe_db_getquery(pool_con, sql_text, label = "render_isrctn")
     if ("Error" %in% names(df)) return(df)
     if (!nrow(df)) return(df)
@@ -1151,10 +1051,9 @@ render_isrctn <- function(sql_text) {
         `Results Posted`    = suppressWarnings(lubridate::dmy(`Results Posted`)),
         `Results Published` = suppressWarnings(lubridate::dmy(`Results Published`))
       ) |>
-      dplyr::select(dplyr::all_of(keep_cols)) |>
-      dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top") #|>
-    #shiny::bindEvent(cache_last_refreshed())
+      dplyr::select(dplyr::all_of(keep_cols)) #|>
+      #dplyr::distinct()
+  }, options = dt_opts_server, server = TRUE, filter = "top")
 }
 
 render_nihr <- function(sql_text) {
@@ -1162,16 +1061,16 @@ render_nihr <- function(sql_text) {
   keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","NIHR ID","Title","Status","End Date")
   
   DT::renderDT({
+    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
     df <- safe_db_getquery(pool_con, sql_text, label = "render_nihr")
     if ("Error" %in% names(df)) return(df)
     if (!nrow(df)) return(df)
     df |>
       dplyr::rename(Guideline = Guideline.number, `NIHR ID` = project_id) |>
       dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) |>
-      dplyr::select(dplyr::all_of(keep_cols)) |>
-      dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top") #|>
-    #shiny::bindEvent(cache_last_refreshed())
+      dplyr::select(dplyr::all_of(keep_cols)) #|>
+      #dplyr::distinct()
+  }, options = dt_opts_server, server = TRUE, filter = "top")
 }
 
 render_eu <- function(sql_text) {
@@ -1179,16 +1078,16 @@ render_eu <- function(sql_text) {
   keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","EU ID","End of Trial Status","Acronym","Title")
   
   DT::renderDT({
+    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
     df <- safe_db_getquery(pool_con, sql_text, label = "render_eu")
     if ("Error" %in% names(df)) return(df)
     if (!nrow(df)) return(df)
     df |>
       dplyr::rename(Guideline = Guideline.number, `EU ID` = EU_Ids) |>
       dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) |>
-      dplyr::select(dplyr::all_of(keep_cols)) |>
-      dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top") #|>
-    #shiny::bindEvent(cache_last_refreshed())
+      dplyr::select(dplyr::all_of(keep_cols)) #|>
+      #dplyr::distinct()
+  }, options = dt_opts_server, server = TRUE, filter = "top")
 }
 
 # --- wire outputs ---
@@ -1315,17 +1214,36 @@ generate_nochange_table_sql <- function(conn,
     qdate = qdate_col, .con = conn
   )
 
+  # Generate "Trial_Ids" sql table column
+  trial_ids_col <- switch(toupper(table_name),
+  "NCT"    = "NCT_Ids",
+  "ISRCTN" = "ISRCTN_Ids",
+  "NIHR"   = "NIHR_Ids",
+  "EU"     = "EU_Ids",
+  NULL
+  )
+
   sql <- glue::glue_sql(
     "
     WITH
+    ids AS (
+    SELECT DISTINCT TRIM({`trial_ids_col`}) AS \"Trial_ID\"
+    FROM \"Trial_Ids\"
+    WHERE {`trial_ids_col`} IS NOT NULL
+      AND TRIM({`trial_ids_col`}) <> ''
+    ),
     current AS (
       SELECT {DBI::SQL(join_keys_sql)}
-      FROM {`tbl`}
+      FROM {`tbl`} t
+      INNER JOIN ids i
+        ON TRIM(t.{`id`}) = i.\"Trial_ID\"
       WHERE {`qdate`} = {current_qd}
     ),
     old AS (
       SELECT {DBI::SQL(join_keys_sql)}
-      FROM {`tbl`}
+      FROM {`tbl`} t
+      INNER JOIN ids i
+        ON TRIM(t.{`id`}) = i.\"Trial_ID\"
       WHERE {`qdate`} = {old_qd}
     ),
     date_added AS (
@@ -1379,6 +1297,7 @@ generate_nochange_table_sql <- function(conn,
 
 # Tables
 output$no_change_nct_sql <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   generate_nochange_table_sql(
     conn = pool_con,
     table_name = "NCT",
@@ -1403,6 +1322,7 @@ output$no_change_nct_sql <- DT::renderDT({
 }, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
 
 output$no_change_isrctn_sql <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   generate_nochange_table_sql(
     conn = pool_con,
     table_name = "ISRCTN",
@@ -1431,6 +1351,7 @@ output$no_change_isrctn_sql <- DT::renderDT({
 }, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
 
 output$no_change_nihr_sql <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   generate_nochange_table_sql(
     conn = pool_con,
     table_name = "NIHR",
@@ -1447,6 +1368,7 @@ output$no_change_nihr_sql <- DT::renderDT({
 }, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
 
 output$no_change_cteu_sql <- DT::renderDT({
+  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
   generate_nochange_table_sql(
     conn = pool_con,
     table_name = "EU",
@@ -1468,14 +1390,27 @@ output$no_change_cteu_sql <- DT::renderDT({
 
 ```{r ServerPubMed, context = "server", echo = FALSE}
 
-# --- Build SQL for a registry's PubMed table (no Trial_Ids filtering) ---
+# --- Build SQL for a registry's PubMed table (Trial_Ids filtering) ---
 pubmed_sql <- function(con, reg) {
-  # Table names assumed: "NCT_PM", "ISRCTN_PM", "NIHR_PM", "EU_PM"
   pm_tbl <- paste0(toupper(reg), "_PM")
 
-  # Select columns in final display order; formatting handled in R
+  # Map registry to the Trial_Ids column used for tracking
+  ids_col <- switch(toupper(reg),
+    "NCT"    = "NCT_Ids",
+    "ISRCTN" = "ISRCTN_Ids",
+    "NIHR"   = "NIHR_Ids",
+    "EU"     = "EU_Ids",
+    stop("Unknown reg in pubmed_sql(): ", reg)
+  )
+
   glue::glue_sql(
     '
+WITH ids AS (
+  SELECT DISTINCT TRIM({`ids_col`}) AS "Trial_ID"
+  FROM "Trial_Ids"
+  WHERE {`ids_col`} IS NOT NULL
+    AND TRIM({`ids_col`}) <> \'\'
+)
 SELECT
   p."Program"                AS "Program",
   p."Guideline.number"       AS "Guideline",
@@ -1483,13 +1418,19 @@ SELECT
   p."ID"                     AS "Trial ID",
   p."pmid"                   AS "pmid",
   p."doi"                    AS "Publication DOI",
-  p."title"                  AS "Title",
-  p."abstract"               AS "Abstract",
-  p."jabbrv"                 AS "Journal",
-  p."Short..working.title."  AS "Condition"
+  p."Title"                  AS "Title",
+  p."Abstract"               AS "Abstract",
+  p."Journal"                AS "Journal",
+  p."Short..working.title."   AS "Working Title"
 FROM {`pm_tbl`} p
+INNER JOIN ids
+  ON TRIM(p."ID") = ids."Trial_ID"
 ORDER BY p."Query_Date" DESC, p."pmid";
-', .con = con) |> as.character()
+',
+    pm_tbl = pm_tbl,
+    ids_col = ids_col,
+    .con = con
+  ) |> as.character()
 }
 
 # --- Small formatters (UTF-8, date, abstract truncation) ---
@@ -1514,22 +1455,164 @@ run_pubmed <- function(reg) {
 
   df |>
     dplyr::mutate(
-      dplyr::across(where(is.character), ~ clean_text((.x))),
+      dplyr::across(where(is.character), ~ clean_text_pubmed((.x))),
       `Query Date` = format(coerce_pm_date(.data[["Query_Date"]]), "%Y/%m/%d"),
       Abstract     = truncate_str(.data[["Abstract"]], 200L)
     ) |>
     dplyr::select(
       "Program","Guideline","Query Date","Trial ID","pmid",
-      "Publication DOI","Title","Abstract","Journal","Condition"
-    ) |>
-    dplyr::distinct()
+      "Publication DOI","Title","Abstract","Journal","Working Title"
+    ) #|>
+    #dplyr::distinct()
 }
 
 # --- Outputs (client-side DT) ---
-output$pubmed_nct    <- DT::renderDT(run_pubmed("NCT"),    options = dt_opts_client, server = FALSE, filter = "top")
-output$pubmed_isrctn <- DT::renderDT(run_pubmed("ISRCTN"), options = dt_opts_client, server = FALSE, filter = "top")
-output$pubmed_nihr   <- DT::renderDT(run_pubmed("NIHR"),   options = dt_opts_client, server = FALSE, filter = "top")
-output$pubmed_eu     <- DT::renderDT(run_pubmed("EU"),     options = dt_opts_client, server = FALSE, filter = "top")
+output$pubmed_nct <- DT::renderDT({
+  db_mtime()               # dependency only: rerun on DB change
+  run_pubmed("NCT")
+}, options = dt_opts_client, server = TRUE, filter = "top")
+
+output$pubmed_isrctn <- DT::renderDT({
+  db_mtime()
+  run_pubmed("ISRCTN")
+}, options = dt_opts_client, server = TRUE, filter = "top")
+
+output$pubmed_nihr <- DT::renderDT({
+  db_mtime()
+  run_pubmed("NIHR")
+}, options = dt_opts_client, server = TRUE, filter = "top")
+
+output$pubmed_eu <- DT::renderDT({
+  db_mtime()
+  run_pubmed("EU")
+}, options = dt_opts_client, server = TRUE, filter = "top")
+```
+
+```{r ServerArchive, context = "server", echo = FALSE}
+# renderer for archive tables
+archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
+
+  if (!DBI::dbIsValid(pool)) {
+    log_msg("archive_dt:", table, "pool invalid")
+    return(DT::datatable(data.frame(Message = "Database connection not valid")))
+  }
+
+  if (!DBI::dbExistsTable(pool, table)) {
+    log_msg("archive_dt:", table, "table missing")
+    return(DT::datatable(data.frame(Message = paste("No archive table found:", table))))
+  }
+
+  tryCatch({
+    rename_quos <- rlang::set_names(rlang::syms(unname(rename_map)), names(rename_map))
+
+    DBI::dbReadTable(pool, table) |>
+      dplyr::select(-dplyr::any_of(drop_cols)) |>
+      dplyr::mutate(
+        dplyr::across(where(is.character), clean_utf8),
+        `Archive Date` = as.Date(as.numeric(.data[["Query_Date"]]), origin = "1970-01-01")
+      ) |>
+      dplyr::select(-dplyr::any_of("Query_Date")) |>
+      dplyr::select(`Archive Date`, dplyr::everything()) |>
+      dplyr::rename(!!!rename_quos) |>
+      DT::datatable(
+        options = list(pageLength = 25, scrollY = "500px"),
+        filter = "top"
+      )
+
+  }, error = function(e) {
+    log_msg("archive_dt ERROR in", table, ":", conditionMessage(e))
+    DT::datatable(data.frame(Error = conditionMessage(e)))
+  })
+}
+
+output$archive_nct <- DT::renderDT({
+
+  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
+
+  archive_dt(
+    pool   = pool_con,
+    table  = "NCT_rxv",
+    drop_cols = c("SeeAlsoLinkURL"),
+    rename_map = c(
+      "Guideline"                  = "Guideline.number",
+      "NCT ID"                     = "NCTId",
+      "Org Study ID"               = "OrgStudyId",
+      "Title"                      = "BriefTitle",
+      "Status"                     = "OverallStatus",
+      "Primary Completion Date"    = "PrimaryCompletionDate",
+      "Completion Date"            = "CompletionDate",
+      "Results Submit Date"        = "ResultsFirstSubmitDate",
+      "Results Post Date"          = "ResultsFirstPostDate",
+      "Last Update"                = "LastUpdatePostDate",
+      "Archiving Comments"         = "Archiving_Comments"
+    )
+  )
+}, server = FALSE)
+
+output$archive_isrctn <- DT::renderDT({
+
+  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
+
+  archive_dt(
+    pool   = pool_con,
+    table  = "ISRCTN_rxv",
+    rename_map = c(
+      "Program or Guideline"       = "Guideline.number",
+      "ISRCTN ID"                  = "ISRCTN_No",
+      "Title"                      = "Public_Title",
+      "Scientific Title"           = "Scientific_Title",
+      "Recruitment Status"         = "Recruitment_Status",
+      "Results completed date"     = "Results_date_completed",
+      "Results URL"                = "Results_url_link",
+      "Results summary"            = "Results_summary",
+      "Results posted date"        = "Results_date_posted",
+      "Results published date"     = "Results_date_first_publication",
+      "Archiving Comments"         = "Archiving_Comments"
+    )
+)}, server = FALSE)
+
+output$archive_nihr <- DT::renderDT({
+
+  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
+
+  archive_dt(
+    pool   = pool_con,
+    table  = "NIHR_rxv",
+    rename_map = c(
+      "Program or Guideline"       = "Guideline.number",
+      "NIHR ID"                    = "project_id",
+      "Project Title"              = "project_title",
+      "Status"                     = "project_status",
+      "End Date"                   = "end_date",
+      "Archiving Comments"         = "Archiving_Comments"
+    )
+  )
+}, server = FALSE)
+
+output$archive_eu <- DT::renderDT({
+
+  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
+
+  archive_dt(
+    pool   = pool_con,
+    table  = "EU_rxv",
+    drop_cols = c(
+      "a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language",
+      "EU_Ids"
+    ),
+    rename_map = c(
+      "Program or Guideline"       = "Guideline.number",
+      "Clinicaltrials.eu ID"       = "X_id",
+      "End of Trial Status"        = "p_end_of_trial_status",
+      "Title"                      = "a3_full_title_of_the_trial",
+      "Abbreviated Title"          = "a32_name_or_abbreviated_title_of_the_trial_where_available",
+      "Sponsor ID"                 = "a41_sponsors_protocol_code_number",
+      "Archiving Comments"         = "Archiving_Comments"
+    )
+  )
+
+}, server = FALSE)
+
 ```
 
 ```{r ServerUserInteractions, context = "server", echo = FALSE}
@@ -1570,7 +1653,7 @@ shiny::observeEvent(input$button_add, {
 
     DBI::dbExecute(pool_con, exp_add())
 
-    refresh_all_data()
+    trialtracker::download_trial_info_wrapper_no_pm_or_email()
 
     shinybusy::remove_modal_spinner()
 
@@ -1678,7 +1761,7 @@ shiny::observeEvent(input$button_add_multi, {
 
     DBI::dbAppendTable(pool_con, "Trial_Ids", to_add())
 
-    refresh_all_data()
+    trialtracker::download_trial_info_wrapper_no_pm_or_email()
 
     shinybusy::remove_modal_spinner()
 
@@ -1699,6 +1782,17 @@ shiny::observeEvent(input$button_add_multi, {
 })
 
 #### REMOVE OR ARCHIVE TRIALS
+
+# Helper function for refreshing the list of trials that can be removed or archived after a user deletes or archives a trial
+refresh_remove_choices <- function() {
+  choices_list <- DBI::dbReadTable(pool_con, "Trial_Ids") |>
+    dplyr::select(ids = input$registry_remove) |>
+    tidyr::drop_na() |>
+    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-")) |>
+    dplyr::pull(ids)
+
+  shiny::updateSelectInput(session, "ID_remove", choices = choices_list)
+}
 
 # SQL template for deleting trial id from Trial_Ids
 sql_delete <- "DELETE FROM Trial_Ids WHERE ?ColID = ?ID_Selected"
@@ -1721,15 +1815,14 @@ exp_delete <- shiny::reactive({
 })
 
 # Render output [used in debugging when enabled in UI]
-output$exp_delete <- shiny::renderText(exp_delete())
+#output$exp_delete <- shiny::renderText(exp_delete())
 
 #Delete logic
 shiny::observeEvent(input$button_delete, {
   shinybusy::show_modal_spinner(spin = "semipolar", color = "#344feb", text = "Deleting Trial - please wait while the dashboard refreshes in background....")
 
   DBI::dbExecute(pool_con, exp_delete())
-
-  refresh_all_data()
+  refresh_remove_choices()
 
   shinybusy::remove_modal_spinner()
 
@@ -1737,20 +1830,8 @@ shiny::observeEvent(input$button_delete, {
 })
 
 #Update remove list
-shiny::observeEvent(input$registry_remove, {
-  choices_list <- DBI::dbReadTable(pool_con, "Trial_Ids") |>
-    dplyr::select(ids = input$registry_remove) |>
-    tidyr::drop_na() |>
-    dplyr::arrange(stringr::str_remove_all(ids, "[A-Z]|-")) |> 
-    dplyr::pull(ids)
+shiny::observeEvent(input$registry_remove, refresh_remove_choices())
   
-  shiny::updateSelectInput(session, "ID_remove", choices = choices_list)
-  
-  #Commented out (for debugging)
-  #output$choices_list <- shiny::renderText(choices_list)
-  
-})
-
 # SQL template for SQL archive select statement
 sql_archive <- "SELECT * FROM ?Orig_Table WHERE ?ColID = ?ID_Selected"
 
@@ -1775,7 +1856,7 @@ exp_archive_pull <- shiny::reactive({
 })
 
 # Render output [used in debugging when enabled in UI]
-output$exp_archive <- shiny::renderText(exp_archive_pull())
+#output$exp_archive <- shiny::renderText(exp_archive_pull())
 
 #Archive logic
 shiny::observeEvent(input$button_archive, {
@@ -1789,8 +1870,7 @@ shiny::observeEvent(input$button_archive, {
   DBI::dbWriteTable(pool_con, paste0(stringr::str_sub(input$registry_remove, end = -5L), "_rxv"), pulled_trial_data, append = TRUE)
 
   DBI::dbExecute(pool_con, exp_delete())
-
-  refresh_all_data()
+  refresh_remove_choices()
 
   shinybusy::remove_modal_spinner()
 
