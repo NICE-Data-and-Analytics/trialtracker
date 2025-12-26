@@ -9,13 +9,18 @@ backup_SQLite_db(
 )
 }
 \arguments{
-\item{backup_subdirectory_path}{A character string specifying the path to the directory where monthly backups will be stored. Defaults to "inst/extdata/monthly_SQLite_backup".}
+\item{backup_subdirectory_path}{A character string specifying the path to the directory
+where monthly backups will be stored.
+Defaults to "inst/extdata/monthly_SQLite_backup".}
 }
 \value{
 None. The function is called for its side effects.
 }
 \description{
-This function creates a monthly backup of the SQLite database files. It ensures that a directory for storing monthly backups exists, creates a subdirectory for the current month, and copies the SQLite files to this subdirectory.
+This function creates a monthly backup of the SQLite database files. It
+ensures that a directory for storing monthly backups exists, creates a
+subdirectory for the current month, and copies the SQLite files to this
+subdirectory.
 }
 \examples{
 backup_SQLite_db()

@@ -39,14 +39,16 @@ write_prog_col_to_df <- function(sql_table, main_con) {
   df <- DBI::dbReadTable(main_con, sql_table)
 
   df <- df |>
-    dplyr::mutate("Program" = dplyr::case_when(
-      Guideline.number == "COVID" ~ "COVID",
-      Guideline.number == "NG191" ~ "COVID",
-      Guideline.number == "NG188" ~ "COVID",
-      stringr::str_detect(Guideline.number, "IPG[0-9]*") ~ "Other",
-      stringr::str_detect(Guideline.number, "IP[0-9]*") ~ "IP",
-      TRUE ~ "Other"
-    ))
+    dplyr::mutate(
+      "Program" = dplyr::case_when(
+        Guideline.number == "COVID" ~ "COVID",
+        Guideline.number == "NG191" ~ "COVID",
+        Guideline.number == "NG188" ~ "COVID",
+        stringr::str_detect(Guideline.number, "IPG[0-9]*") ~ "Other",
+        stringr::str_detect(Guideline.number, "IP[0-9]*") ~ "IP",
+        TRUE ~ "Other"
+      )
+    )
 
   DBI::dbWriteTable(main_con, sql_table, df, overwrite = TRUE)
 }
@@ -75,7 +77,12 @@ return_only_distinct <- function(main_con, table_name) {
 remove_dups_and_overwrite_table <- function(table_name, main_con) {
   clean <- return_only_distinct(main_con = main_con, table_name = table_name)
 
-  DBI::dbWriteTable(main_con, name = table_name, value = clean, overwrite = TRUE)
+  DBI::dbWriteTable(
+    main_con,
+    name = table_name,
+    value = clean,
+    overwrite = TRUE
+  )
 }
 
 #' Rename Program "NG" to "Other"
@@ -90,11 +97,63 @@ remove_dups_and_overwrite_table <- function(table_name, main_con) {
 rename_ng_to_other <- function(table_name, main_con) {
   tab <- DBI::dbReadTable(main_con, name = table_name)
 
-  tab_new <- tab |> dplyr::mutate("Program" = dplyr::case_when(
-    Program == "NG" ~ "Other",
-    TRUE ~ Program
-  ))
+  tab_new <- tab |>
+    dplyr::mutate(
+      "Program" = dplyr::case_when(
+        Program == "NG" ~ "Other",
+        TRUE ~ Program
+      )
+    )
 
-  DBI::dbWriteTable(main_con, name = table_name, value = tab_new, overwrite = TRUE)
+  DBI::dbWriteTable(
+    main_con,
+    name = table_name,
+    value = tab_new,
+    overwrite = TRUE
+  )
 }
 
+#' Add indexes to key fields in SQLite db
+#'
+#' This function adds indexes to key fields in the SQLite database.
+#'
+#' @param main_con A database connection object.
+#' @return None. The function updates the SQL database by adding indexes to key fields.
+#' @importFrom DBI dbExecute
+add_indexes_to_sqlite_db <- function(main_con) {
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_nct_id_qd   ON NCT(NCTId, Query_Date)'
+  )
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_isr_id_qd   ON ISRCTN(ISRCTN_No, Query_Date)'
+  )
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_nihr_id_qd  ON NIHR(project_id, Query_Date)'
+  )
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_eu_id_qd    ON EU(EU_Ids, Query_Date)'
+  )
+
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_trialids_nct    ON Trial_Ids(NCT_Ids)'
+  )
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_trialids_isrctn ON Trial_Ids(ISRCTN_Ids)'
+  )
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_trialids_nihr   ON Trial_Ids(NIHR_Ids)'
+  )
+  DBI::dbExecute(
+    main_con,
+    'CREATE INDEX IF NOT EXISTS idx_trialids_eu     ON Trial_Ids(EU_Ids)'
+  )
+  DBI::dbExecute(main_con, "ANALYZE;")
+  DBI::dbExecute(main_con, "PRAGMA optimize;")
+}

@@ -15,6 +15,8 @@ concat_ids(df, id_col)
 A vector of unique, non-missing IDs.
 }
 \description{
-This internal function concatenates Trial IDs from a specified column in a dataframe, ensuring no missing or duplicate values. It is used for constructing API URLs.
+This internal function concatenates Trial IDs from a specified column in a
+dataframe, ensuring no missing or duplicate values. It is used for
+constructing API URLs.
 }
 \keyword{internal}

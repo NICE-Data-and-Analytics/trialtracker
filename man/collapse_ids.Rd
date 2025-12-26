@@ -17,6 +17,8 @@ collapse_ids(df, id_col, paste_collapse)
 A single string of concatenated IDs separated by the specified delimiter.
 }
 \description{
-This internal function collapses IDs from a specified column in a dataframe into a single string, separated by a specified delimiter. It is used for constructing API URLs.
+This internal function collapses IDs from a specified column in a dataframe
+into a single string, separated by a specified delimiter. It is used for
+constructing API URLs.
 }
 \keyword{internal}

@@ -17,7 +17,11 @@ update_db(main_con, registry, DF)
 None. This function is called for its side effects.
 }
 \description{
-This function updates the specified SQLite database table with new data from an API call. If the table does not exist, it creates the table and appends the data. If the table exists, it appends the data only if there are no entries for the current date. If entries for the current date exist, it overwrites the table with entries from previous dates and then appends the new data.
+This function updates the specified SQLite database table with new data from an API call.
+If the table does not exist, it creates the table and appends the data. If the table exists,
+it appends the data only if there are no entries for the current date. If entries for the
+current date exist, it overwrites the table with entries from previous dates and then appends
+the new data.
 }
 \examples{
 \dontrun{

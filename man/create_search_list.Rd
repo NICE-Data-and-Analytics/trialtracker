@@ -9,12 +9,15 @@ create_search_list(trial_id_df, registry)
 \arguments{
 \item{trial_id_df}{A dataframe containing the trial IDs.}
 
-\item{registry}{A string specifying the registry name, which is used to construct the column name containing the IDs.}
+\item{registry}{A string specifying the registry name, which is used to
+construct the column name containing the IDs.}
 }
 \value{
 A vector of unique, non-missing IDs.
 }
 \description{
-This internal function generates a list of unique, non-missing IDs from a specified column in a dataframe. It is used to prepare IDs for inclusion in an API call.
+This internal function generates a list of unique, non-missing IDs from a
+specified column in a dataframe. It is used to prepare IDs for inclusion in
+an API call.
 }
 \keyword{internal}
