@@ -28,9 +28,9 @@ log_msg <- function(...) {
   message(txt)
 }
 
-# ---- DB init (global; available to both UI + server contexts) ----
-db_path <- file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite")
-db_path_abs <- tryCatch(normalizePath(db_path, winslash="\\", mustWork=TRUE), error = function(e) NA_character_)
+# DB initialisation
+db_path <- file.path("inst", "extdata", "RSQLite_data", "TrialTracker-db.sqlite") # relative path
+db_path_abs <- tryCatch(normalizePath(db_path, winslash="\\", mustWork=TRUE), error = function(e) NA_character_) # absolute_path
 
 pool_con <- NULL
 if (!is.na(db_path_abs) && nzchar(db_path_abs)) {
