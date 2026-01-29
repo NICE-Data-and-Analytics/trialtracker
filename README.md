@@ -21,3 +21,5 @@ To install the *package* and provide the functions install from the repo via `re
 
 The main wrapper function `download_trial_info_wrapper()` calls subsequent functions to update the database and generate email alerts as appropriate. This function, with the 'dev_flag' set appropriately to TRUE or FALSE, should be scheduled as a cron job on the hosting instance.
 Further information can be found in the function documentation.
+
+<img width="5069" height="2236" alt="tt_diag" src="https://github.com/user-attachments/assets/4a5160ba-667c-4c49-bac0-77c08f1dc1a8" />
