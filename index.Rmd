@@ -21,11 +21,6 @@ log_msg <- trialtracker:::configure_dashboard_logging()
 db_path_abs <- trialtracker:::resolve_db_path_in_app()
 pool_con <- trialtracker:::init_pool_with_pragmas(db_path_abs, log_fun = log_msg)
 
-# Regex patterns
-NCT_pattern    <- "^NCT[0-9]{8}$"
-EU_pattern     <- "^[0-9]{4}-[0-9]{6}-[0-9]{2}$"
-ISRCTN_pattern <- "^ISRCTN[0-9]{8}$"
-NIHR_pattern   <- "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})|(^COV-LT.*)"
 
 # DT options (server for big tables; client for smaller PubMed tables)
 dt_opts_server <- list(pageLength = 50L, lengthMenu = c(25L, 50L, 100L), deferRender = TRUE, processing = TRUE, searchDelay = 400, dom = "tip")
@@ -530,11 +525,14 @@ output$clinicaltrialseu_monthly_change <- render_recent_changes(eu_sql, "render_
 ```
 
 ```{r ServerNoChangesInLast6M, context = "server", echo = FALSE}
-# Tables
-output$no_change_nct_sql <- DT::renderDT({
-  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-  trialtracker:::generate_nochange_table_sql(
-    conn = pool_con,
+
+# Define DT options for wide, non-paginated tables
+nochange_dt_opts <- list(bPaginate = FALSE, scrollY = "500px")
+
+# ---- specs (one per output) ----
+nochange_specs <- list(
+
+  no_change_nct_sql = list(
     table_name = "NCT",
     id_col = "NCTId",
     rename_list = c(
@@ -550,16 +548,17 @@ output$no_change_nct_sql <- DT::renderDT({
       `Last Update` = "LastUpdatePostDate"
     ),
     drop_cols = "SeeAlsoLinkURL",
-    reorder_cols = c("Program", "Guideline", "Date Added", "NCT ID", "Org Study ID", "Title", "Status",
-                     "Primary Completion Date", "Completion Date", "Results Submit Date", "Results Post Date", "Last Update"),
-    date_cols = c("PrimaryCompletionDate", "CompletionDate", "ResultsFirstSubmitDate", "ResultsFirstPostDate", "LastUpdatePostDate")
-  )
-}, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
+    reorder_cols = c(
+      "Program", "Guideline", "Date Added", "NCT ID", "Org Study ID", "Title", "Status",
+      "Primary Completion Date", "Completion Date", "Results Submit Date", "Results Post Date", "Last Update"
+    ),
+    date_cols = c(
+      "PrimaryCompletionDate", "CompletionDate",
+      "ResultsFirstSubmitDate", "ResultsFirstPostDate", "LastUpdatePostDate"
+    )
+  ),
 
-output$no_change_isrctn_sql <- DT::renderDT({
-  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-  trialtracker:::generate_nochange_table_sql(
-    conn = pool_con,
+  no_change_isrctn_sql = list(
     table_name = "ISRCTN",
     id_col = "ISRCTN_No",
     rename_list = c(
@@ -574,21 +573,19 @@ output$no_change_isrctn_sql <- DT::renderDT({
       `Results posted date` = "Results_date_posted",
       `Results published date` = "Results_date_first_publication"
     ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "ISRCTN ID", "Title", "Scientific Title",
-                     "Recruitment Status", "Results URL", "Results summary",
-                     "Results completed date", "Results posted date", "Results published date"),
+    reorder_cols = c(
+      "Program", "Guideline", "Date Added", "ISRCTN ID", "Title", "Scientific Title",
+      "Recruitment Status", "Results URL", "Results summary",
+      "Results completed date", "Results posted date", "Results published date"
+    ),
     extra_mutate = ~ dplyr::mutate(.,
       Results_date_completed = lubridate::dmy(Results_date_completed),
       Results_date_posted = lubridate::dmy(Results_date_posted),
       Results_date_first_publication = lubridate::dmy(Results_date_first_publication)
     )
-  )
-}, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
+  ),
 
-output$no_change_nihr_sql <- DT::renderDT({
-  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-  trialtracker:::generate_nochange_table_sql(
-    conn = pool_con,
+  no_change_nihr_sql = list(
     table_name = "NIHR",
     id_col = "project_id",
     rename_list = c(
@@ -599,13 +596,9 @@ output$no_change_nihr_sql <- DT::renderDT({
       `End Date` = "end_date"
     ),
     reorder_cols = c("Program", "Guideline", "Date Added", "NIHR ID", "Project Title", "Status", "End Date")
-  )
-}, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
+  ),
 
-output$no_change_cteu_sql <- DT::renderDT({
-  db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-  trialtracker:::generate_nochange_table_sql(
-    conn = pool_con,
+  no_change_cteu_sql = list(
     table_name = "EU",
     id_col = "X_id",
     rename_list = c(
@@ -616,12 +609,29 @@ output$no_change_cteu_sql <- DT::renderDT({
       `Abbreviated Title` = "a32_name_or_abbreviated_title_of_the_trial_where_available",
       `Sponsor ID` = "a41_sponsors_protocol_code_number"
     ),
-    reorder_cols = c("Program", "Guideline", "Date Added", "Clinicaltrials.eu ID", "Title",
-                     "Abbreviated Title", "End of Trial Status", "Sponsor ID")
+    reorder_cols = c(
+      "Program", "Guideline", "Date Added", "Clinicaltrials.eu ID", "Title",
+      "Abbreviated Title", "End of Trial Status", "Sponsor ID"
+    )
   )
-}, options = list(bPaginate = FALSE, scrollY = "500px"), filter = "top")
+)
+
+# ---- wire outputs (loop) ----
+for (out_id in names(nochange_specs)) {
+  spec <- nochange_specs[[out_id]]
+
+  output[[out_id]] <- DT::renderDT({
+    db_mtime()  # dependency only: rerun whenever sqlite file mtime changes
+
+    # Call with only the args present in the spec (keeps defaults intact)
+    args <- c(list(conn = pool_con), spec)
+
+    do.call(trialtracker:::generate_nochange_table_sql, args)
+  }, options = nochange_dt_opts, filter = "top")
+}
 
 ```
+
 
 ```{r ServerPubMed, context = "server", echo = FALSE}
 
@@ -668,129 +678,105 @@ output$pubmed_eu <- DT::renderDT({
 ```
 
 ```{r ServerArchive, context = "server", echo = FALSE}
-# renderer for archive tables
+
+# renderer for archive tables (DT-only wrapper)
 archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
+  df <- trialtracker:::archive_table_df(
+    con = pool,
+    table = table,
+    rename_map = rename_map,
+    drop_cols = drop_cols,
+    log_fun = log_msg
+  )
 
-  if (!DBI::dbIsValid(pool)) {
-    log_msg("archive_dt:", table, "pool invalid")
-    return(DT::datatable(data.frame(Message = "Database connection not valid")))
-  }
-
-  if (!DBI::dbExistsTable(pool, table)) {
-    log_msg("archive_dt:", table, "table missing")
-    return(DT::datatable(data.frame(Message = paste("No archive table found:", table))))
-  }
-
-  tryCatch({
-    rename_quos <- rlang::set_names(rlang::syms(unname(rename_map)), names(rename_map))
-
-    DBI::dbReadTable(pool, table) |>
-      dplyr::select(-dplyr::any_of(drop_cols)) |>
-      dplyr::mutate(
-        dplyr::across(where(is.character), trialtracker:::clean_utf8),
-        `Archive Date` = as.Date(as.numeric(.data[["Query_Date"]]), origin = "1970-01-01")
-      ) |>
-      dplyr::select(-dplyr::any_of("Query_Date")) |>
-      dplyr::select(`Archive Date`, dplyr::everything()) |>
-      dplyr::rename(!!!rename_quos) |>
-      DT::datatable(
-        options = list(pageLength = 25, scrollY = "500px"),
-        filter = "top"
-      )
-
-  }, error = function(e) {
-    log_msg("archive_dt ERROR in", table, ":", conditionMessage(e))
-    DT::datatable(data.frame(Error = conditionMessage(e)))
-  })
+  DT::datatable(
+    df,
+    options = list(pageLength = 25, scrollY = "500px"),
+    filter = "top"
+  )
 }
 
-output$archive_nct <- DT::renderDT({
-
-  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
-
-  archive_dt(
-    pool   = pool_con,
-    table  = "NCT_rxv",
+# ---- archive table specs ----
+archive_specs <- list(
+  archive_nct = list(
+    table = "NCT_rxv",
     drop_cols = c("SeeAlsoLinkURL"),
     rename_map = c(
-      "Guideline"                  = "Guideline.number",
-      "NCT ID"                     = "NCTId",
-      "Org Study ID"               = "OrgStudyId",
-      "Title"                      = "BriefTitle",
-      "Status"                     = "OverallStatus",
-      "Primary Completion Date"    = "PrimaryCompletionDate",
-      "Completion Date"            = "CompletionDate",
-      "Results Submit Date"        = "ResultsFirstSubmitDate",
-      "Results Post Date"          = "ResultsFirstPostDate",
-      "Last Update"                = "LastUpdatePostDate",
-      "Archiving Comments"         = "Archiving_Comments"
+      "Guideline"               = "Guideline.number",
+      "NCT ID"                  = "NCTId",
+      "Org Study ID"            = "OrgStudyId",
+      "Title"                   = "BriefTitle",
+      "Status"                  = "OverallStatus",
+      "Primary Completion Date" = "PrimaryCompletionDate",
+      "Completion Date"         = "CompletionDate",
+      "Results Submit Date"     = "ResultsFirstSubmitDate",
+      "Results Post Date"       = "ResultsFirstPostDate",
+      "Last Update"             = "LastUpdatePostDate",
+      "Archiving Comments"      = "Archiving_Comments"
     )
-  )
-}, server = FALSE)
-
-output$archive_isrctn <- DT::renderDT({
-
-  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
-
-  archive_dt(
-    pool   = pool_con,
-    table  = "ISRCTN_rxv",
+  ),
+  archive_isrctn = list(
+    table = "ISRCTN_rxv",
+    drop_cols = character(),
     rename_map = c(
-      "Program or Guideline"       = "Guideline.number",
-      "ISRCTN ID"                  = "ISRCTN_No",
-      "Title"                      = "Public_Title",
-      "Scientific Title"           = "Scientific_Title",
-      "Recruitment Status"         = "Recruitment_Status",
-      "Results completed date"     = "Results_date_completed",
-      "Results URL"                = "Results_url_link",
-      "Results summary"            = "Results_summary",
-      "Results posted date"        = "Results_date_posted",
-      "Results published date"     = "Results_date_first_publication",
-      "Archiving Comments"         = "Archiving_Comments"
+      "Program or Guideline"    = "Guideline.number",
+      "ISRCTN ID"               = "ISRCTN_No",
+      "Title"                   = "Public_Title",
+      "Scientific Title"        = "Scientific_Title",
+      "Recruitment Status"      = "Recruitment_Status",
+      "Results completed date"  = "Results_date_completed",
+      "Results URL"             = "Results_url_link",
+      "Results summary"         = "Results_summary",
+      "Results posted date"     = "Results_date_posted",
+      "Results published date"  = "Results_date_first_publication",
+      "Archiving Comments"      = "Archiving_Comments"
     )
-)}, server = FALSE)
-
-output$archive_nihr <- DT::renderDT({
-
-  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
-
-  archive_dt(
-    pool   = pool_con,
-    table  = "NIHR_rxv",
+  ),
+  archive_nihr = list(
+    table = "NIHR_rxv",
+    drop_cols = character(),
     rename_map = c(
-      "Program or Guideline"       = "Guideline.number",
-      "NIHR ID"                    = "project_id",
-      "Project Title"              = "project_title",
-      "Status"                     = "project_status",
-      "End Date"                   = "end_date",
-      "Archiving Comments"         = "Archiving_Comments"
+      "Program or Guideline"    = "Guideline.number",
+      "NIHR ID"                 = "project_id",
+      "Project Title"           = "project_title",
+      "Status"                  = "project_status",
+      "End Date"                = "end_date",
+      "Archiving Comments"      = "Archiving_Comments"
     )
-  )
-}, server = FALSE)
-
-output$archive_eu <- DT::renderDT({
-
-  db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
-
-  archive_dt(
-    pool   = pool_con,
-    table  = "EU_rxv",
+  ),
+  archive_eu = list(
+    table = "EU_rxv",
     drop_cols = c(
       "a31_title_of_the_trial_for_lay_people_in_easily_understood_ie_nontechnical_language",
       "EU_Ids"
     ),
     rename_map = c(
-      "Program or Guideline"       = "Guideline.number",
-      "Clinicaltrials.eu ID"       = "X_id",
-      "End of Trial Status"        = "p_end_of_trial_status",
-      "Title"                      = "a3_full_title_of_the_trial",
-      "Abbreviated Title"          = "a32_name_or_abbreviated_title_of_the_trial_where_available",
-      "Sponsor ID"                 = "a41_sponsors_protocol_code_number",
-      "Archiving Comments"         = "Archiving_Comments"
+      "Program or Guideline"    = "Guideline.number",
+      "Clinicaltrials.eu ID"    = "X_id",
+      "End of Trial Status"     = "p_end_of_trial_status",
+      "Title"                   = "a3_full_title_of_the_trial",
+      "Abbreviated Title"       = "a32_name_or_abbreviated_title_of_the_trial_where_available",
+      "Sponsor ID"              = "a41_sponsors_protocol_code_number",
+      "Archiving Comments"      = "Archiving_Comments"
     )
   )
+)
 
-}, server = FALSE)
+# ---- wire outputs ----
+for (out_id in names(archive_specs)) {
+  spec <- archive_specs[[out_id]]
+
+  output[[out_id]] <- DT::renderDT({
+    db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
+
+    archive_dt(
+      pool       = pool_con,
+      table      = spec$table,
+      rename_map = spec$rename_map,
+      drop_cols  = spec$drop_cols
+    )
+  }, server = FALSE)
+}
 
 ```
 
@@ -819,16 +805,16 @@ exp_add <- shiny::reactive({
 
 # Single trial add logic
 shiny::observeEvent(input$button_add, {
-  valid_id_check <-
-    stringr::str_detect(
-      stringr::str_trim(input$ID_add),
-      stringr::str_c(NCT_pattern, EU_pattern, ISRCTN_pattern, NIHR_pattern, sep = "|")
-    )
+
+  # Validate ID against the selected registry (input$registry_add is e.g. "NCT_Ids")
+  valid_id_check <- trialtracker:::is_valid_trial_id(input$ID_add, registry = input$registry_add)
 
   if (valid_id_check) {
-    shinybusy::show_modal_spinner(spin = "semipolar",
-                                  color = "#344feb",
-                                  text = "Adding Trial - please wait while the dashboard refreshes in background....")
+    shinybusy::show_modal_spinner(
+      spin  = "semipolar",
+      color = "#344feb",
+      text  = "Adding Trial - please wait while the dashboard refreshes in background...."
+    )
 
     DBI::dbExecute(pool_con, exp_add())
 
@@ -842,7 +828,8 @@ shiny::observeEvent(input$button_add, {
         "Trial Added!"
       )))
     })
-  } else if (!valid_id_check) {
+
+  } else {
     output$single_result <- shiny::renderUI({
       shiny::HTML(as.character(div(
         style = "color: red;",
@@ -880,13 +867,9 @@ to_add <- shiny::reactive({
 # Multiple upload logic
 shiny::observeEvent(input$uploadtemplate, {
   df <- to_add()
-  NCT_check    <- stringr::str_detect(tidyr::replace_na(df$NCT_Ids, ""), NCT_pattern)
-  EU_check     <- stringr::str_detect(tidyr::replace_na(df$EU_Ids, ""), EU_pattern)
-  ISRCTN_check <- stringr::str_detect(tidyr::replace_na(df$ISRCTN_Ids, ""), ISRCTN_pattern)
-  NIHR_check   <- stringr::str_detect(tidyr::replace_na(df$NIHR_Ids, ""), NIHR_pattern)
-  Valid_ID     <- NCT_check | EU_check | ISRCTN_check | NIHR_check
 
-  errors <- which(!Valid_ID)
+  # Find rows with any invalid (non-empty) IDs across the known registry columns
+  errors <- trialtracker:::invalid_upload_rows(df)
 
   ## Commented out as only used for debugging
   # output$errors <- shiny::renderText({
@@ -906,7 +889,7 @@ shiny::observeEvent(input$uploadtemplate, {
         )
       )))
     })
-  } else if (length(errors) == 0L) {
+  } else {
     output$multi_result <- shiny::renderText({
       shiny::HTML(as.character(div(
         style = "color: green;",
@@ -915,15 +898,11 @@ shiny::observeEvent(input$uploadtemplate, {
     })
   }
 })
+
 shiny::observeEvent(input$button_add_multi, {
-  NCT_check <- stringr::str_detect(tidyr::replace_na(to_add()$NCT_Ids, ""), NCT_pattern)
-  EU_check <- stringr::str_detect(tidyr::replace_na(to_add()$EU_Ids, ""), EU_pattern)
-  ISRCTN_check <- stringr::str_detect(tidyr::replace_na(to_add()$ISRCTN_Ids, ""), ISRCTN_pattern)
-  NIHR_check <- stringr::str_detect(tidyr::replace_na(to_add()$NIHR_Ids, ""), NIHR_pattern)
-  Valid_ID <- {
-    NCT_check | EU_check | ISRCTN_check | NIHR_check
-  }
-  multi_errors <- which(!Valid_ID)
+
+  # Re-check validity at the point of submission
+  multi_errors <- trialtracker:::invalid_upload_rows(to_add())
 
   ## Commented out as only used for debugging
   # output$multi_errors <- shiny::renderText({
@@ -934,9 +913,11 @@ shiny::observeEvent(input$button_add_multi, {
   # })
 
   if (length(multi_errors) == 0L) {
-    shinybusy::show_modal_spinner(spin = "semipolar",
-                                  color = "#344feb",
-                                  text = "Adding Trials - please wait while the dashboard refreshes in background....")
+    shinybusy::show_modal_spinner(
+      spin  = "semipolar",
+      color = "#344feb",
+      text  = "Adding Trials - please wait while the dashboard refreshes in background...."
+    )
 
     DBI::dbAppendTable(pool_con, "Trial_Ids", to_add())
 
@@ -950,7 +931,7 @@ shiny::observeEvent(input$button_add_multi, {
         "Multiple Trials Added! - Trials should appear on Live Trial Info tab in 10 seconds. If not, please refresh browser"
       )))
     })
-  } else if (length(multi_errors) > 0L) {
+  } else {
     output$multi_result <- shiny::renderText({
       shiny::HTML(as.character(div(
         style = "color: red;",
@@ -985,11 +966,7 @@ exp_delete <- shiny::reactive({
       input$registry_remove == "NIHR_Ids" ~ "REPLACE(REPLACE(NIHR_Ids, '-', ''),'/','')",
       TRUE ~ input$registry_remove
     )),
-    ID_Selected = if (input$registry_remove == "NIHR_Ids") {
-      stringr::str_replace_all(input$ID_remove, "(/)|(-)", "")
-    } else {
-      input$ID_remove
-    }
+    ID_Selected = trialtracker:::normalize_trial_id(input$ID_remove, input$registry_remove)
   )
 })
 
@@ -1026,11 +1003,7 @@ exp_archive_pull <- shiny::reactive({
       input$registry_remove == "ISRCTN_Ids" ~ "ISRCTN_No",
       input$registry_remove == "EU_Ids" ~ "EU_Ids"
     )),
-    ID_Selected = if (input$registry_remove == "NIHR_Ids") {
-      stringr::str_replace_all(input$ID_remove, "(/)|(-)", "")
-    } else {
-      input$ID_remove
-    }
+    ID_Selected = trialtracker:::normalize_trial_id(input$ID_remove, input$registry_remove)
   )
 })
 

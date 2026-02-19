@@ -1142,8 +1142,6 @@ ORDER BY "Date Added" DESC, "ISRCTN_No";
   ) |>
     as.character()
 }
-
-
 #' Build SQL for “Recent Status Changes” (NIHR)
 #' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
 #' @param lookback_days Integer days to look back when selecting the “old” snapshot.
@@ -1193,8 +1191,6 @@ ORDER BY "Date Added" DESC, "project_id";
   ) |>
     as.character()
 }
-
-
 #' Build SQL for “Recent Status Changes” (ClinicalTrialsEU)
 #' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
 #' @param lookback_days Integer days to look back when selecting the “old” snapshot.
@@ -1239,4 +1235,217 @@ ORDER BY "Date Added" DESC, "EU_Ids";
     .con = con
   ) |>
     as.character()
+}
+# ------------------------------------------------------------------------------
+# ID / regex checking
+# ------------------------------------------------------------------------------
+#' Registry ID regex patterns used by the dashboard
+#'
+#' Centralised regex patterns for the Trial_Ids identifier columns.
+#' These are used for input validation (single add, CSV upload) and
+#' for consistent behaviour across the dashboard and unit tests.
+#'
+#' @return Named character vector of regex patterns.
+#' @keywords internal
+registry_id_patterns <- function() {
+  c(
+    NCT = "^NCT[0-9]{8}$",
+    EU = "^[0-9]{4}-[0-9]{6}-[0-9]{2}$",
+    ISRCTN = "^ISRCTN[0-9]{8}$",
+    NIHR = "(NIHR[0-9]{0,6})|(RP-PG-[0-9]{4}-[0-9]{4,5})|([0-9]{2,3}[/-][0-9]{2,4}[/-][0-9]{2,4})|(^ICA-.*-[0-9]{3})|(^COV-LT.*)"
+  )
+}
+
+#' Map Trial_Ids column name to registry key
+#'
+#' @param registry_col One of "NCT_Ids","EU_Ids","ISRCTN_Ids","NIHR_Ids".
+#' @return Registry key: "NCT","EU","ISRCTN","NIHR".
+#' @keywords internal
+registry_key_from_col <- function(registry_col) {
+  switch(
+    registry_col,
+    NCT_Ids = "NCT",
+    EU_Ids = "EU",
+    ISRCTN_Ids = "ISRCTN",
+    NIHR_Ids = "NIHR",
+    stop("Unknown registry_col: ", registry_col)
+  )
+}
+
+#' Normalise an ID for comparisons (currently NIHR only)
+#'
+#' For NIHR IDs we match the dashboard SQL behaviour by stripping '-' and '/'.
+#' Other registries are returned trimmed and unchanged.
+#'
+#' @param id Character vector of IDs.
+#' @param registry Either a registry key ("NCT","EU","ISRCTN","NIHR") or a Trial_Ids column name.
+#' @return Normalised character vector.
+#' @keywords internal
+normalize_trial_id <- function(id, registry) {
+  id <- stringr::str_trim(as.character(id))
+  if (is.na(registry) || !nzchar(registry)) {
+    return(id)
+  }
+
+  reg <- if (registry %in% c("NCT", "EU", "ISRCTN", "NIHR")) {
+    registry
+  } else {
+    registry_key_from_col(registry)
+  }
+
+  if (identical(reg, "NIHR")) {
+    stringr::str_replace_all(id, "(/)|(-)", "")
+  } else {
+    id
+  }
+}
+
+#' Validate trial IDs
+#'
+#' Validates one or more IDs. If a registry is supplied, validates only against
+#' that registry's pattern. If registry is NULL, validates against ANY known pattern.
+#'
+#' @param id Character vector.
+#' @param registry Either a registry key ("NCT","EU","ISRCTN","NIHR"), a Trial_Ids column name,
+#'   or NULL to allow any registry.
+#' @return Logical vector (TRUE/FALSE) the same length as id.
+#' @keywords internal
+is_valid_trial_id <- function(id, registry = NULL) {
+  id <- stringr::str_trim(as.character(id))
+  pats <- registry_id_patterns()
+
+  if (is.null(registry)) {
+    any_pat <- paste0("(", paste(pats, collapse = ")|("), ")")
+    return(stringr::str_detect(id, any_pat))
+  }
+
+  reg <- if (registry %in% names(pats)) {
+    registry
+  } else {
+    registry_key_from_col(registry)
+  }
+  stringr::str_detect(id, pats[[reg]])
+}
+
+#' Validate an uploaded Trial_Ids-style data.frame
+#'
+#' Expects columns like NCT_Ids, EU_Ids, ISRCTN_Ids, NIHR_Ids (any subset).
+#' A row is valid if every non-empty ID field matches its registry pattern.
+#'
+#' @param df Data.frame of uploaded rows.
+#' @param id_cols Which ID columns to check (defaults to known Trial_Ids columns).
+#' @return Integer vector of 1-based row indices that have at least one invalid ID.
+#' @keywords internal
+invalid_upload_rows <- function(
+  df,
+  id_cols = c("NCT_Ids", "EU_Ids", "ISRCTN_Ids", "NIHR_Ids")
+) {
+  if (is.null(df) || !nrow(df)) {
+    return(integer())
+  }
+  cols <- intersect(id_cols, names(df))
+  if (!length(cols)) {
+    return(integer())
+  }
+
+  bad <- rep(FALSE, nrow(df))
+
+  for (col in cols) {
+    x <- tidyr::replace_na(df[[col]], "")
+    x <- stringr::str_trim(as.character(x))
+
+    # treat empty as OK; only validate non-empty
+    nonempty <- nzchar(x)
+    ok <- rep(TRUE, length(x))
+    ok[nonempty] <- is_valid_trial_id(x[nonempty], registry = col)
+
+    bad <- bad | (!ok)
+  }
+
+  which(bad)
+}
+# ------------------------------------------------------------------------------
+# Archive table helper
+# ------------------------------------------------------------------------------
+#' Read and prepare an archive table for display
+#'
+#' Reads an archived registry table (e.g. "NCT_rxv") and applies the standard
+#' dashboard transformations:
+#' \itemize{
+#'   \item validates DB connection and table existence
+#'   \item drops unwanted columns
+#'   \item coerces character columns to UTF-8
+#'   \item converts \code{Query_Date} (days since 1970-01-01) to \code{Archive Date}
+#'   \item renames columns to user-facing labels
+#'   \item returns a data.frame suitable for DT rendering
+#' }
+#'
+#' This helper does not create DT widgets; UI rendering is handled by the Rmd/server.
+#'
+#' @param con A DBI connection (or pool object usable by DBI).
+#' @param table Archive table name (e.g. "NCT_rxv").
+#' @param rename_map Named character vector: \code{c("New Name" = "old_name")}.
+#' @param drop_cols Character vector of columns to drop if present.
+#' @param log_fun Optional logging function, called with messages on failures.
+#'
+#' @return A data.frame. On failure, returns a one-column data.frame with
+#'   \code{Message} or \code{Error}.
+#' @keywords internal
+archive_table_df <- function(
+  con,
+  table,
+  rename_map,
+  drop_cols = character(),
+  log_fun = NULL
+) {
+  log_safe <- function(...) {
+    if (is.function(log_fun)) {
+      log_fun(...)
+    }
+    invisible(NULL)
+  }
+
+  if (is.null(con) || !DBI::dbIsValid(con)) {
+    log_safe("archive_table_df:", table, "connection invalid")
+    return(data.frame(
+      Message = "Database connection not valid",
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  if (!DBI::dbExistsTable(con, table)) {
+    log_safe("archive_table_df:", table, "table missing")
+    return(data.frame(
+      Message = paste("No archive table found:", table),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  tryCatch(
+    {
+      rename_quos <- rlang::set_names(
+        rlang::syms(unname(rename_map)),
+        names(rename_map)
+      )
+
+      df <- DBI::dbReadTable(con, table) |>
+        dplyr::select(-dplyr::any_of(drop_cols)) |>
+        dplyr::mutate(
+          dplyr::across(where(is.character), trialtracker:::clean_utf8),
+          `Archive Date` = as.Date(
+            as.numeric(.data[["Query_Date"]]),
+            origin = "1970-01-01"
+          )
+        ) |>
+        dplyr::select(-dplyr::any_of("Query_Date")) |>
+        dplyr::select(`Archive Date`, dplyr::everything()) |>
+        dplyr::rename(!!!rename_quos)
+
+      df
+    },
+    error = function(e) {
+      log_safe("archive_table_df ERROR in", table, ":", conditionMessage(e))
+      data.frame(Error = conditionMessage(e), stringsAsFactors = FALSE)
+    }
+  )
 }
