@@ -2,7 +2,7 @@
 % Please edit documentation in R/dashboard_helpers.R
 \name{with_scaffold}
 \alias{with_scaffold}
-\title{Emit common CTE scaffolding used by dashboard SQL queries}
+\title{Dashboard helper functions (SQL generation, DB access, and text sanitisation)}
 \usage{
 with_scaffold(
   source_table,
@@ -30,6 +30,23 @@ with_scaffold(
 A DBI SQL object.
 }
 \description{
+Internal utilities used by the trialtracker dashboard. This file contains:
+\itemize{
+\item SQL code-generation helpers that emit common CTE and other scaffolding
+\item Safe wrappers around DBI queries to prevent UI-breaking errors
+\item Text cleaning and encoding utilities for reliable rendering
+}
+}
+\details{
+These functions are not part of the public package API. They exist to:
+\itemize{
+\item Keep the dashboard Rmd thin and focused on UI/server wiring
+\item Centralise SQL-generation logic in testable package code
+\item Provide defensive handling of database and encoding edge cases
+}
+
+Emit common CTE scaffolding used by dashboard SQL queries
+
 Generates a DBI SQL fragment containing the shared CTE structure used across
 snapshot-comparison queries in the dashboard. The emitted CTEs are:
 \itemize{
@@ -40,8 +57,7 @@ snapshot-comparison queries in the dashboard. The emitted CTEs are:
 \item \code{o_pick}: most recent row on or before \code{latest_qd - lookback_days}
 \item \code{o}: rows from \code{source_table} at the selected older snapshot per ID
 }
-}
-\details{
+
 Assumes \code{source_table} contains a numeric \code{Query_Date} column expressed
 as days since 1970-01-01. This function does not execute SQL; it only generates
 a safely quoted fragment for inclusion in larger queries.

@@ -14,8 +14,6 @@
 #'   \item Provide defensive handling of database and encoding edge cases
 #' }
 #'
-#' @keywords internal
-NULL
 
 # ------------------------------------------------------------------------------
 # SQL scaffolding
@@ -872,9 +870,6 @@ init_pool_with_pragmas <- function(db_path_abs, log_fun) {
 #' Keeping formatting separate from Shiny renderers makes unit testing easy and
 #' keeps index.Rmd short and readable.
 #'
-#' @keywords internal
-NULL
-
 #' Format recent changes: ClinicalTrials.gov (NCT)
 #' @param df Data frame returned by the NCT recent-changes SQL.
 #' @return Formatted data frame (renamed, truncated, dates parsed, columns ordered).

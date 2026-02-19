@@ -40,7 +40,9 @@ test_that("safe_db_getquery returns Error data.frame on SQL error", {
 
   # Capture logs if log_msg exists / gets defined locally
   logs <- character(0)
-  log_msg <- function(...) { logs <<- c(logs, paste(..., collapse = " ")) }
+  log_msg <- function(...) {
+    logs <<- c(logs, paste(..., collapse = " "))
+  }
 
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -70,7 +72,11 @@ test_that("safe_db_getquery accepts DBI::SQL input", {
   DBI::dbExecute(con, "CREATE TABLE t (x INTEGER)")
   DBI::dbExecute(con, "INSERT INTO t (x) VALUES (1), (2)")
 
-  out <- safe_db_getquery(con, DBI::SQL("SELECT x FROM t ORDER BY x"), label = "unit")
+  out <- safe_db_getquery(
+    con,
+    DBI::SQL("SELECT x FROM t ORDER BY x"),
+    label = "unit"
+  )
 
   expect_equal(out$x, c(1L, 2L))
 })

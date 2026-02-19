@@ -1,6 +1,6 @@
 Package: trialtracker
 Title: Creates a Dashboard for monitoring clinical trial status
-Version: 0.1.9.0000
+Version: 1.9
 Authors@R: 
     person("Robert", "Willans", , "robertjwillans@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-3461-9691"))
