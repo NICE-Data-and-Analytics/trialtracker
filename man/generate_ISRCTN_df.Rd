@@ -18,7 +18,8 @@ This function retrieves ISRCTN trial data from a given URL and returns it as a d
 \examples{
 \dontrun{
 ISRCTN_URL <- "https://www.isrctn.com/api/query/format/who?q="
-ISRCTN_query <- "ISRCTN27106947\%20OR\%20ISRCTN16033549\%20OR\%20ISRCTN17573805\%20OR\%20ISRCTN73327972&limit=15"
+ISRCTN_ids <- c("ISRCTN27106947", "ISRCTN16033549", "ISRCTN17573805", "ISRCTN73327972")
+ISRCTN_query <- paste0(paste(ISRCTN_ids, collapse = "\%20OR\%20"), "&limit=15")
 df <- generate_ISRCTN_df(c(ISRCTN_URL, ISRCTN_query)
 }
 }

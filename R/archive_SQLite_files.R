@@ -10,12 +10,20 @@
 #' Defaults to "inst/extdata/monthly_SQLite_backup".
 #' @return None. The function is called for its side effects.
 #' @examples
+#' \dontrun{
 #' backup_SQLite_db()
 #' backup_SQLite_db("custom/path/to/backup")
+#' }
 #' @export
-backup_SQLite_db <- function(backup_subdirectory_path = "inst/extdata/monthly_SQLite_backup") {
+backup_SQLite_db <- function(
+  backup_subdirectory_path = "inst/extdata/monthly_SQLite_backup"
+) {
   # Normalize the backup subdirectory path
-  backup_subdirectory_path <- normalizePath(backup_subdirectory_path, winslash = "/", mustWork = FALSE)
+  backup_subdirectory_path <- normalizePath(
+    backup_subdirectory_path,
+    winslash = "/",
+    mustWork = FALSE
+  )
   message("Normalized backup subdirectory path: ", backup_subdirectory_path)
 
   # Create a directory to store monthly SQLite backups if it doesn't already exist
@@ -28,7 +36,10 @@ backup_SQLite_db <- function(backup_subdirectory_path = "inst/extdata/monthly_SQ
   }
 
   # Set the current monthly path
-  monthly_path <- file.path(backup_subdirectory_path, stringr::str_sub(as.character(Sys.Date()), 1, 7))
+  monthly_path <- file.path(
+    backup_subdirectory_path,
+    stringr::str_sub(as.character(Sys.Date()), 1, 7)
+  )
   monthly_path <- normalizePath(monthly_path, winslash = "/", mustWork = FALSE)
   message("Monthly path: ", monthly_path)
 
@@ -43,7 +54,10 @@ backup_SQLite_db <- function(backup_subdirectory_path = "inst/extdata/monthly_SQ
 
   # Copy SQLite files to backup folder
   # Get the paths for all files in the RSQLite_Data folder
-  files_to_copy <- dir(file.path("inst/extdata/RSQLite_data"), full.names = TRUE)
+  files_to_copy <- dir(
+    file.path("inst/extdata/RSQLite_data"),
+    full.names = TRUE
+  )
   message("Files to copy: ", paste(files_to_copy, collapse = ", "))
 
   # Copy the files to the new folder
