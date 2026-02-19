@@ -14,8 +14,8 @@ runtime: shiny
 
 knitr::opts_chunk$set(cache = FALSE)
 
-#Configure logging function
-log_msg <- trialtracker:::configure_dashboard_logging()
+#Configure logging
+trialtracker:::set_dashboard_log_file()
 
 # DB initialisation
 db_path_abs <- trialtracker:::resolve_db_path_in_app()
@@ -644,7 +644,7 @@ run_pubmed <- function(reg) {
 
   df |>
     dplyr::mutate(
-      dplyr::across(where(is.character), ~ trialtracker:::clean_text_pubmed((.x))),
+      dplyr::across(dplyr::where(is.character), ~ trialtracker:::clean_text_pubmed((.x))),
       `Query Date` = format(trialtracker:::coerce_pm_date(.data[["Query_Date"]]), "%Y/%m/%d"),
       Abstract     = trialtracker:::truncate_str(.data[["Abstract"]], 200L)
     ) |>

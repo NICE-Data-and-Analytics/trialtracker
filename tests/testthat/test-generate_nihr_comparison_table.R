@@ -1,79 +1,121 @@
-library(testthat)
-library(mockery)
+testthat::test_that("generate_nihr_comparison_table writes NIHR changes with correct args", {
+  testthat::skip_if_not_installed("compareDF")
+  testthat::skip_if_not_installed("mockery")
 
-# Mock data
-mock_new_data <- data.frame(
-  Guideline.number = c("GL123", "GL456"),
-  project_id = c(1, 2),
-  Query_Date = as.Date(c("2023-01-01", "2023-01-02")),
-  URL = c("url1", "url2"),
-  project_title = c("title1", "title2"),
-  stringsAsFactors = FALSE
-)
+  # Minimal but realistic NIHR frames
+  new_df <- data.frame(
+    Guideline.number = c("GL123", "GL456"),
+    project_id = c(1, 2),
+    Query_Date = as.Date(c("2023-01-01", "2023-01-02")),
+    URL = c("url1", "url2"),
+    project_title = c("title1", "title2"),
+    stringsAsFactors = FALSE
+  )
 
-mock_old_data <- data.frame(
-  Guideline.number = c("GL123", "GL456"),
-  project_id = c(1, 2),
-  Query_Date = as.Date(c("2022-12-01", "2022-12-02")),
-  URL = c("url1", "url2"),
-  project_title = c("title1", "title2"),
-  stringsAsFactors = FALSE
-)
+  old_df <- data.frame(
+    Guideline.number = c("GL123", "GL456"),
+    project_id = c(1, 2),
+    Query_Date = as.Date(c("2022-12-01", "2022-12-02")),
+    URL = c("url1", "url2"),
+    project_title = c("title1", "title2"),
+    stringsAsFactors = FALSE
+  )
 
-mock_comparison <- data.frame(
-  Guideline.number = c("GL123", "GL456"),
-  project_id = c(1, 2),
-  Change_Type = c("No Change", "No Change"),
-  stringsAsFactors = FALSE
-)
+  # Capture what gets written
+  captured <- new.env(parent = emptyenv())
+  captured$called <- FALSE
+  captured$args <- NULL
 
-# Mock functions
-mock_pull_nihr_change <- function(prog_regex, old_or_new, main_con) {
-  if (old_or_new == "new") {
-    mock_new_data
-  } else {
-    mock_old_data
-  }
-}
+  # Stub pull_nihr_change (this is called unqualified, so stub works)
+  mockery::stub(
+    generate_nihr_comparison_table,
+    "pull_nihr_change",
+    function(prog_regex, old_or_new, main_con) {
+      if (identical(old_or_new, "new")) new_df else old_df
+    }
+  )
 
-mock_compare_df <- function(df_new, df_old, group_col, exclude, stop_on_error) {
-  mock_comparison
-}
+  # Stub write_changes_to_disk (also called unqualified)
+  mockery::stub(
+    generate_nihr_comparison_table,
+    "write_changes_to_disk",
+    function(comparison, daily_path, DF_Name, prog_name) {
+      captured$called <- TRUE
+      captured$args <- list(
+        comparison = comparison,
+        daily_path = daily_path,
+        DF_Name = DF_Name,
+        prog_name = prog_name
+      )
+      TRUE
+    }
+  )
 
-mock_write_changes_to_disk <- function(comparison, daily_path, DF_Name, prog_name) {
-  TRUE
-}
+  out <- generate_nihr_comparison_table(
+    program = "Test Program",
+    program_regex = "GL.*",
+    main_con = NULL,
+    daily_path = "mock/path"
+  )
 
-test_that("generate_nihr_comparison_table works with valid inputs", {
-  # Mock the dependencies
-  stub(generate_nihr_comparison_table, "pull_nihr_change", mock_pull_nihr_change)
-  stub(generate_nihr_comparison_table, "compareDF::compare_df", mock_compare_df)
-  stub(generate_nihr_comparison_table, "write_changes_to_disk", mock_write_changes_to_disk)
+  testthat::expect_true(isTRUE(out))
+  testthat::expect_true(isTRUE(captured$called))
 
-  # Mock database connection
-  main_con <- NULL
-  daily_path <- "mock/path"
+  testthat::expect_identical(captured$args$daily_path, "mock/path")
+  testthat::expect_identical(captured$args$DF_Name, "NIHR")
+  testthat::expect_identical(captured$args$prog_name, "Test Program")
 
-  # Call the function
-  generate_nihr_comparison_table("Test Program", "GL.*", main_con, daily_path)
-
-  # Assertions
-  expect_true(TRUE) # If no error is thrown, the test passes
+  # Sanity check: something got passed through as comparison output
+  testthat::expect_false(is.null(captured$args$comparison))
 })
 
-test_that("generate_nihr_comparison_table handles empty dataframes", {
-  # Mock the dependencies to return empty dataframes
-  stub(generate_nihr_comparison_table, "pull_nihr_change", function(...) data.frame())
-  stub(generate_nihr_comparison_table, "compareDF::compare_df", function(...) data.frame())
-  stub(generate_nihr_comparison_table, "write_changes_to_disk", mock_write_changes_to_disk)
+testthat::test_that("generate_nihr_comparison_table handles empty inputs", {
+  testthat::skip_if_not_installed("compareDF")
+  testthat::skip_if_not_installed("mockery")
 
-  # Mock database connection
-  main_con <- NULL
-  daily_path <- "mock/path"
+  # IMPORTANT: empty frames should still have the required columns
+  empty_df <- data.frame(
+    Guideline.number = character(),
+    project_id = integer(),
+    Query_Date = as.Date(character()),
+    URL = character(),
+    project_title = character(),
+    stringsAsFactors = FALSE
+  )
 
-  # Call the function
-  generate_nihr_comparison_table("Test Program", "GL.*", main_con, daily_path)
+  captured <- new.env(parent = emptyenv())
+  captured$called <- FALSE
+  captured$args <- NULL
 
-  # Assertions
-  expect_true(TRUE) # If no error is thrown, the test passes
+  mockery::stub(
+    generate_nihr_comparison_table,
+    "pull_nihr_change",
+    function(...) empty_df
+  )
+
+  mockery::stub(
+    generate_nihr_comparison_table,
+    "write_changes_to_disk",
+    function(comparison, daily_path, DF_Name, prog_name) {
+      captured$called <- TRUE
+      captured$args <- list(
+        comparison = comparison,
+        daily_path = daily_path,
+        DF_Name = DF_Name,
+        prog_name = prog_name
+      )
+      TRUE
+    }
+  )
+
+  out <- generate_nihr_comparison_table(
+    program = "Test Program",
+    program_regex = "GL.*",
+    main_con = NULL,
+    daily_path = "mock/path"
+  )
+
+  testthat::expect_true(isTRUE(out))
+  testthat::expect_true(isTRUE(captured$called))
+  testthat::expect_identical(captured$args$DF_Name, "NIHR")
 })

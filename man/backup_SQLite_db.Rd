@@ -23,6 +23,8 @@ subdirectory for the current month, and copies the SQLite files to this
 subdirectory.
 }
 \examples{
+\dontrun{
 backup_SQLite_db()
 backup_SQLite_db("custom/path/to/backup")
+}
 }

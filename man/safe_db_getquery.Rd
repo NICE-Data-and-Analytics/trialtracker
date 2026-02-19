@@ -22,4 +22,3 @@ connection or query error), logs the issue and returns a single-column
 data.frame containing the error message. This keeps DT outputs stable and
 prevents UI crashes during rendering.
 }
-\keyword{internal}

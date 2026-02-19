@@ -2,19 +2,19 @@
 % Please edit documentation in R/dashboard_helpers.R
 \name{nihr_recent_changes_sql}
 \alias{nihr_recent_changes_sql}
-\title{Build SQL for “Recent Status Changes” (NIHR)}
+\title{Build SQL for 'Recent Status Changes' (NIHR)}
 \usage{
 nihr_recent_changes_sql(con, lookback_days = 31L)
 }
 \arguments{
 \item{con}{DBI connection (or pool) used for identifier quoting in glue_sql.}
 
-\item{lookback_days}{Integer days to look back when selecting the “old” snapshot.}
+\item{lookback_days}{Integer days to look back when selecting the 'old' snapshot.}
 }
 \value{
 Character SQL string.
 }
 \description{
-Build SQL for “Recent Status Changes” (NIHR)
+Build SQL for 'Recent Status Changes' (NIHR)
 }
 \keyword{internal}

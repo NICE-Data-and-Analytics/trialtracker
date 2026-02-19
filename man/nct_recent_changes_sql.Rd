@@ -2,14 +2,14 @@
 % Please edit documentation in R/dashboard_helpers.R
 \name{nct_recent_changes_sql}
 \alias{nct_recent_changes_sql}
-\title{Build SQL for “Recent Status Changes” (NCT / ClinicalTrials.gov)}
+\title{Build SQL for 'Recent Status Changes' (NCT / ClinicalTrials.gov)}
 \usage{
 nct_recent_changes_sql(con, lookback_days = 31L)
 }
 \arguments{
 \item{con}{DBI connection (or pool) used for identifier quoting in glue_sql.}
 
-\item{lookback_days}{Integer days to look back when selecting the “old” snapshot.}
+\item{lookback_days}{Integer days to look back when selecting the 'old' snapshot.}
 }
 \value{
 Character SQL string.

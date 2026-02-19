@@ -2,7 +2,7 @@
 % Please edit documentation in R/dashboard_helpers.R
 \name{format_recent_changes_nct}
 \alias{format_recent_changes_nct}
-\title{Format “Recent Status Changes” tables for dashboard display}
+\title{Format 'Recent Status Changes' tables for dashboard display}
 \usage{
 format_recent_changes_nct(df)
 }
@@ -13,7 +13,7 @@ format_recent_changes_nct(df)
 Formatted data frame (renamed, truncated, dates parsed, columns ordered).
 }
 \description{
-Pure formatting helpers used by the dashboard “Recent Status Changes” tab.
+Pure formatting helpers used by the dashboard 'Recent Status Changes' tab.
 These functions take the raw result of a SQL query (data.frame) and return
 a cleaned, consistently ordered data.frame ready for DT rendering.
 }

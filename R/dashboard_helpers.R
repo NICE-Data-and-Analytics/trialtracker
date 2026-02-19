@@ -97,7 +97,7 @@ o AS (
   )
 }
 
-# --- NCT “Latest” SQL builder (no temp tables; exact columns/order) ---
+# --- NCT 'Latest' SQL builder (no temp tables; exact columns/order) ---
 nct_latest_sql_from_trial_ids <- function(con) {
   glue::glue_sql(
     "
@@ -147,7 +147,7 @@ ORDER BY \"Date Added\" DESC, \"NCT ID\";
   )
 }
 
-# --- EU “Latest” SQL builder (filter via Trial_Ids.EU_Ids; exact columns/order; no temp tables) ---
+# --- EU 'Latest' SQL builder (filter via Trial_Ids.EU_Ids; exact columns/order; no temp tables) ---
 eu_latest_sql_from_trial_ids <- function(con) {
   glue::glue_sql(
     "
@@ -191,7 +191,7 @@ ORDER BY \"Date Added\" DESC, \"Clinicaltrials.eu ID\";
   )
 }
 
-## --- ISRCTN “Latest” SQL builder (non-reactive) ---
+## --- ISRCTN 'Latest' SQL builder (non-reactive) ---
 isr_latest_sql_from_trial_ids <- function(con) {
   glue::glue_sql(
     "
@@ -240,7 +240,7 @@ ORDER BY \"Date Added\" DESC, \"ISRCTN ID\";
   )
 }
 
-# --- NIHR “Latest” SQL builder (filters via Trial_Ids; normalizes IDs) ---
+# --- NIHR 'Latest' SQL builder (filters via Trial_Ids; normalizes IDs) ---
 nihr_latest_sql_from_trial_ids <- function(con) {
   glue::glue_sql(
     "
@@ -345,12 +345,27 @@ generate_nochange_table_sql <- function(
   comments_col = "Comments",
   date_added_name = "Date Added"
 ) {
+  if (!DBI::dbExistsTable(conn, table_name)) {
+    stop("unsupported table_name: ", table_name, call. = FALSE)
+  }
+
   cols <- DBI::dbListFields(conn, table_name)
 
-  as_int1 <- function(x, what = "value") {
+  as_int1 <- function(x, what = "value", allow_na = FALSE) {
     n <- suppressWarnings(as.numeric(x))
-    if (length(n) != 1 || is.na(n)) {
-      stop(what, " is not numeric/integer-like: ", paste(x, collapse = ", "))
+    if (length(n) != 1) {
+      stop(what, " is not scalar: ", paste(x, collapse = ", "), call. = FALSE)
+    }
+    if (is.na(n)) {
+      if (allow_na) {
+        return(NA_integer_)
+      }
+      stop(
+        what,
+        " is not numeric/integer-like: ",
+        paste(x, collapse = ", "),
+        call. = FALSE
+      )
     }
     as.integer(n)
   }
@@ -388,20 +403,22 @@ generate_nochange_table_sql <- function(
     )
   )$qd[[1]]
 
-  old_qd <- as_int1(old_qd_raw, "old_qd")
+  old_qd <- as_int1(old_qd_raw, "old_qd", allow_na = TRUE)
+
   if (is.na(old_qd)) {
     stop(
       "No snapshot found on/before ",
       as.character(target_date),
       " in table ",
-      table_name
+      table_name,
+      call. = FALSE
     )
   }
 
   # ---- Rename maps (rename_list: new = old) ----
   new_to_old <- if (!is.null(rename_list)) rename_list else character(0)
   old_to_new <- if (!is.null(rename_list)) {
-    setNames(names(rename_list), unname(rename_list))
+    stats::setNames(names(rename_list), unname(rename_list))
   } else {
     character(0)
   }
@@ -478,7 +495,7 @@ generate_nochange_table_sql <- function(
   on_sql <- glue::glue_sql("c.{`k`} IS o.{`k`}", k = join_keys, .con = conn) |>
     glue::glue_sql_collapse(sep = " AND ")
 
-  # Only pull join_keys in current/old — enough to compare + output
+  # Only pull join_keys in current/old - enough to compare + output
   join_keys_sql <- glue::glue_sql("{`k`*}", k = join_keys, .con = conn)
 
   # Date Added (numeric day-count): MIN(Query_Date) - 1
@@ -497,6 +514,14 @@ generate_nochange_table_sql <- function(
     "EU" = "EU_Ids",
     NULL
   )
+
+  if (is.null(trial_ids_col)) {
+    stop(
+      "generate_nochange_table_sql(): unsupported table_name '",
+      table_name,
+      "'. Expected one of: NCT, ISRCTN, NIHR, EU."
+    )
+  }
 
   sql <- glue::glue_sql(
     "
@@ -547,8 +572,8 @@ generate_nochange_table_sql <- function(
   res <- DBI::dbGetQuery(conn, sql)
 
   # ---- R-side post-processing ----
-  if (exists("trialtracker:::clean_utf8", mode = "function")) {
-    res[] <- lapply(res, trialtracker:::clean_utf8)
+  if (exists("clean_utf8", mode = "function")) {
+    res[] <- lapply(res, clean_utf8)
   }
 
   if (date_added_name %in% names(res)) {
@@ -600,7 +625,7 @@ generate_nochange_table_sql <- function(
 #' @param sql SQL string or DBI::SQL object.
 #' @param label Short label identifying the caller (used in error messages/logs).
 #' @return A data.frame containing query results, or a data.frame with an \code{Error} column.
-#' @keywords internal
+
 safe_db_getquery <- function(con, sql, label) {
   if (is.null(con)) {
     msg <- paste0(label, ": no DB connection")
@@ -651,7 +676,7 @@ fast_trunc <- function(x, n = 120L) {
   # UI-only truncation, cheap
   x <- as.character(x)
   i <- nchar(x) > n
-  x[i] <- paste0(substr(x[i], 1L, n), "…")
+  x[i] <- paste0(substr(x[i], 1L, n), "...")
   x
 }
 
@@ -718,64 +743,62 @@ coerce_pm_date <- function(x) {
 truncate_str <- function(x, n = 200L) {
   x <- as.character(x)
   i <- nchar(x) > n
-  x[i] <- paste0(substr(x[i], 1L, n), "…")
+  x[i] <- paste0(substr(x[i], 1L, n), "...")
   x
 }
 
-#' Configure TrialTracker dashboard logging
+# ------------------------------
+# Logging helpers
+# ------------------------------
+
+#' Internal logger used by TrialTracker helpers
 #'
-#' Sets the option \code{trialtracker.log_file} (defaulting to a file in
-#' \code{tempdir()}) and returns a logger function that writes timestamped lines
-#' to that file and also emits them via \code{message()}.
+#' Writes to `getOption("trialtracker.log_file")` (default: tempdir()).
+#' Safe to call even when not configured.
 #'
-#' This mirrors the logging pattern currently defined in \code{index.Rmd}, but in
-#' a reusable (and testable) package function.
-#'
-#' @param log_file Path to the log file. If \code{NULL}, uses
-#'   \code{file.path(tempdir(), "trialtracker_shiny.log")}.
-#' @return A function with signature \code{function(...)} that logs messages.
 #' @keywords internal
-configure_dashboard_logging <- function(log_file = NULL) {
-  # 1) Choose a default log file if one is not provided ---
+log_msg <- function(...) {
+  lf <- getOption(
+    "trialtracker.log_file",
+    file.path(tempdir(), "trialtracker_shiny.log")
+  )
+
+  txt <- paste0(
+    format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    " | ",
+    paste(..., collapse = " ")
+  )
+
+  try(cat(txt, "\n", file = lf, append = TRUE), silent = TRUE)
+  try(message(txt), silent = TRUE)
+
+  invisible(txt)
+}
+
+#' Configure TrialTracker dashboard logging destination
+#'
+#' Sets `options(trialtracker.log_file=...)`.
+#'
+#' @param log_file Path to log file (default tempdir()).
+#' @return The normalized log file path (invisibly).
+#'
+#' @keywords internal
+set_dashboard_log_file <- function(log_file = NULL) {
   if (is.null(log_file)) {
     log_file <- file.path(tempdir(), "trialtracker_shiny.log")
   }
 
-  # 2) Store the log path in an option ---
-  # normalizePath(..., mustWork = FALSE) avoids errors if the file doesn't exist yet.
-  # winslash = "\\" keeps Windows-style path
-  options(
-    trialtracker.log_file = normalizePath(
-      log_file,
-      winslash = "\\",
-      mustWork = FALSE
-    )
-  )
+  lf <- normalizePath(log_file, winslash = "/", mustWork = FALSE)
+  options(trialtracker.log_file = lf)
 
-  # 3) Return a logger function
-  # The retuned function:
-  #   - reads the current option each time (so changing the option later works)
-  #   - timestamps each line
-  #   - appends to the log file
-  #   - also calls message() so logs show up in console / Connect logs
-  function(...) {
-    lf <- getOption(
-      "trialtracker.log_file",
-      file.path(tempdir(), "trialtracker_shiny.log")
-    )
-
-    txt <- paste0(
-      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-      " | ",
-      paste(..., collapse = " ")
-    )
-
-    cat(txt, "\n", file = lf, append = TRUE)
-    message(txt)
-
-    invisible(txt)
-  }
+  invisible(lf)
 }
+
+
+# ------------------------------
+# DB helpers
+# ------------------------------
+
 #' Resolve the TrialTracker SQLite DB path inside the app folder
 #'
 #' Looks for the SQLite DB at:
@@ -861,9 +884,14 @@ init_pool_with_pragmas <- function(db_path_abs, log_fun) {
   log_fun("DB connected:", db_path_abs)
   pool_con
 }
-#' Format “Recent Status Changes” tables for dashboard display
+
+# ------------------------------
+# Formatting helper for recent status changes
+# ------------------------------
+
+#' Format 'Recent Status Changes' tables for dashboard display
 #'
-#' Pure formatting helpers used by the dashboard “Recent Status Changes” tab.
+#' Pure formatting helpers used by the dashboard 'Recent Status Changes' tab.
 #' These functions take the raw result of a SQL query (data.frame) and return
 #' a cleaned, consistently ordered data.frame ready for DT rendering.
 #'
@@ -896,8 +924,8 @@ format_recent_changes_nct <- function(df) {
     dplyr::rename(Guideline = Guideline.number, `NCT ID` = NCTId) |>
     dplyr::mutate(
       URL = paste0("https://clinicaltrials.gov/ct2/show/", .data[["NCT ID"]]),
-      Title = trialtracker:::fast_trunc(.data[["Title"]], 80L),
-      Condition = trialtracker:::fast_trunc(.data[["Condition"]], 30L),
+      Title = fast_trunc(.data[["Title"]], 80L),
+      Condition = fast_trunc(.data[["Condition"]], 30L),
       `Completion Date` = suppressWarnings(lubridate::ymd(.data[[
         "Completion Date"
       ]])),
@@ -937,7 +965,7 @@ format_recent_changes_isrctn <- function(df) {
   df |>
     dplyr::rename(Guideline = Guideline.number, ISRCTN = ISRCTN_No) |>
     dplyr::mutate(
-      Title = trialtracker:::fast_trunc(.data[["Title"]], 75L),
+      Title = fast_trunc(.data[["Title"]], 75L),
       `Results Completed` = suppressWarnings(lubridate::dmy(.data[[
         "Results Completed"
       ]])),
@@ -971,7 +999,7 @@ format_recent_changes_nihr <- function(df) {
 
   df |>
     dplyr::rename(Guideline = Guideline.number, `NIHR ID` = project_id) |>
-    dplyr::mutate(Title = trialtracker:::fast_trunc(.data[["Title"]], 90L)) |>
+    dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) |>
     dplyr::select(dplyr::all_of(keep_cols))
 }
 
@@ -995,20 +1023,20 @@ format_recent_changes_eu <- function(df) {
 
   df |>
     dplyr::rename(Guideline = Guideline.number, `EU ID` = EU_Ids) |>
-    dplyr::mutate(Title = trialtracker:::fast_trunc(.data[["Title"]], 90L)) |>
+    dplyr::mutate(Title = fast_trunc(.data[["Title"]], 90L)) |>
     dplyr::select(dplyr::all_of(keep_cols))
 }
 # ------------------------------------------------------------------------------
 # Recent Status Changes: SQL builders (internal)
 # ------------------------------------------------------------------------------
 
-#' Build SQL for “Recent Status Changes” (NCT / ClinicalTrials.gov)
+#' Build SQL for 'Recent Status Changes' (NCT / ClinicalTrials.gov)
 #'
 #' Generates the SQL used by the dashboard to compare the latest snapshot vs an
 #' older snapshot (lookback window) for tracked NCT IDs.
 #'
 #' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
-#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @param lookback_days Integer days to look back when selecting the 'old' snapshot.
 #' @return Character SQL string.
 #' @keywords internal
 nct_recent_changes_sql <- function(con, lookback_days = 31L) {
@@ -1065,9 +1093,9 @@ ORDER BY "Date Added" DESC, "NCTId";
 }
 
 
-#' Build SQL for “Recent Status Changes” (ISRCTN)
+#' Build SQL for 'Recent Status Changes' (ISRCTN)
 #' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
-#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @param lookback_days Integer days to look back when selecting the 'old' snapshot.
 #' @return Character SQL string.
 #' @keywords internal
 isrctn_recent_changes_sql <- function(con, lookback_days = 31L) {
@@ -1137,9 +1165,9 @@ ORDER BY "Date Added" DESC, "ISRCTN_No";
   ) |>
     as.character()
 }
-#' Build SQL for “Recent Status Changes” (NIHR)
+#' Build SQL for 'Recent Status Changes' (NIHR)
 #' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
-#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @param lookback_days Integer days to look back when selecting the 'old' snapshot.
 #' @return Character SQL string.
 #' @keywords internal
 nihr_recent_changes_sql <- function(con, lookback_days = 31L) {
@@ -1186,9 +1214,9 @@ ORDER BY "Date Added" DESC, "project_id";
   ) |>
     as.character()
 }
-#' Build SQL for “Recent Status Changes” (ClinicalTrialsEU)
+#' Build SQL for 'Recent Status Changes' (ClinicalTrialsEU)
 #' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
-#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @param lookback_days Integer days to look back when selecting the 'old' snapshot.
 #' @return Character SQL string.
 #' @keywords internal
 eu_recent_changes_sql <- function(con, lookback_days = 31L) {
@@ -1426,7 +1454,7 @@ archive_table_df <- function(
       df <- DBI::dbReadTable(con, table) |>
         dplyr::select(-dplyr::any_of(drop_cols)) |>
         dplyr::mutate(
-          dplyr::across(where(is.character), trialtracker:::clean_utf8),
+          dplyr::across(dplyr::where(is.character), clean_utf8),
           `Archive Date` = as.Date(
             as.numeric(.data[["Query_Date"]]),
             origin = "1970-01-01"
