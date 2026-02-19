@@ -863,3 +863,380 @@ init_pool_with_pragmas <- function(db_path_abs, log_fun) {
   log_fun("DB connected:", db_path_abs)
   pool_con
 }
+#' Format “Recent Status Changes” tables for dashboard display
+#'
+#' Pure formatting helpers used by the dashboard “Recent Status Changes” tab.
+#' These functions take the raw result of a SQL query (data.frame) and return
+#' a cleaned, consistently ordered data.frame ready for DT rendering.
+#'
+#' Keeping formatting separate from Shiny renderers makes unit testing easy and
+#' keeps index.Rmd short and readable.
+#'
+#' @keywords internal
+NULL
+
+#' Format recent changes: ClinicalTrials.gov (NCT)
+#' @param df Data frame returned by the NCT recent-changes SQL.
+#' @return Formatted data frame (renamed, truncated, dates parsed, columns ordered).
+#' @keywords internal
+format_recent_changes_nct <- function(df) {
+  keep_cols <- c(
+    "Change",
+    "Changed Field",
+    "Program",
+    "Guideline",
+    "Date Added",
+    "URL",
+    "NCT ID",
+    "Acronym",
+    "Title",
+    "Condition",
+    "Status",
+    "Completion Date",
+    "Results Submit Date",
+    "Last Update Date"
+  )
+
+  df |>
+    dplyr::rename(Guideline = Guideline.number, `NCT ID` = NCTId) |>
+    dplyr::mutate(
+      URL = paste0("https://clinicaltrials.gov/ct2/show/", .data[["NCT ID"]]),
+      Title = trialtracker:::fast_trunc(.data[["Title"]], 80L),
+      Condition = trialtracker:::fast_trunc(.data[["Condition"]], 30L),
+      `Completion Date` = suppressWarnings(lubridate::ymd(.data[[
+        "Completion Date"
+      ]])),
+      `Last Update Date` = suppressWarnings(lubridate::ymd(.data[[
+        "Last Update Date"
+      ]])),
+      `Results Submit Date` = suppressWarnings(lubridate::ymd(.data[[
+        "Results Submit Date"
+      ]]))
+    ) |>
+    dplyr::select(dplyr::all_of(keep_cols))
+}
+
+#' Format recent changes: ISRCTN
+#' @param df Data frame returned by the ISRCTN recent-changes SQL.
+#' @return Formatted data frame.
+#' @keywords internal
+format_recent_changes_isrctn <- function(df) {
+  keep_cols <- c(
+    "Change",
+    "Changed Field",
+    "Program",
+    "Guideline",
+    "Date Added",
+    "URL",
+    "ISRCTN",
+    "Acronym",
+    "Title",
+    "Recruitment Status",
+    "Results URL",
+    "Results Summary",
+    "Results Completed",
+    "Results Posted",
+    "Results Published"
+  )
+
+  df |>
+    dplyr::rename(Guideline = Guideline.number, ISRCTN = ISRCTN_No) |>
+    dplyr::mutate(
+      Title = trialtracker:::fast_trunc(.data[["Title"]], 75L),
+      `Results Completed` = suppressWarnings(lubridate::dmy(.data[[
+        "Results Completed"
+      ]])),
+      `Results Posted` = suppressWarnings(lubridate::dmy(.data[[
+        "Results Posted"
+      ]])),
+      `Results Published` = suppressWarnings(lubridate::dmy(.data[[
+        "Results Published"
+      ]]))
+    ) |>
+    dplyr::select(dplyr::all_of(keep_cols))
+}
+
+#' Format recent changes: NIHR
+#' @param df Data frame returned by the NIHR recent-changes SQL.
+#' @return Formatted data frame.
+#' @keywords internal
+format_recent_changes_nihr <- function(df) {
+  keep_cols <- c(
+    "Change",
+    "Changed Field",
+    "Program",
+    "Guideline",
+    "Date Added",
+    "URL",
+    "NIHR ID",
+    "Title",
+    "Status",
+    "End Date"
+  )
+
+  df |>
+    dplyr::rename(Guideline = Guideline.number, `NIHR ID` = project_id) |>
+    dplyr::mutate(Title = trialtracker:::fast_trunc(.data[["Title"]], 90L)) |>
+    dplyr::select(dplyr::all_of(keep_cols))
+}
+
+#' Format recent changes: Clinicaltrials.eu
+#' @param df Data frame returned by the EU recent-changes SQL.
+#' @return Formatted data frame.
+#' @keywords internal
+format_recent_changes_eu <- function(df) {
+  keep_cols <- c(
+    "Change",
+    "Changed Field",
+    "Program",
+    "Guideline",
+    "Date Added",
+    "URL",
+    "EU ID",
+    "End of Trial Status",
+    "Acronym",
+    "Title"
+  )
+
+  df |>
+    dplyr::rename(Guideline = Guideline.number, `EU ID` = EU_Ids) |>
+    dplyr::mutate(Title = trialtracker:::fast_trunc(.data[["Title"]], 90L)) |>
+    dplyr::select(dplyr::all_of(keep_cols))
+}
+# ------------------------------------------------------------------------------
+# Recent Status Changes: SQL builders (internal)
+# ------------------------------------------------------------------------------
+
+#' Build SQL for “Recent Status Changes” (NCT / ClinicalTrials.gov)
+#'
+#' Generates the SQL used by the dashboard to compare the latest snapshot vs an
+#' older snapshot (lookback window) for tracked NCT IDs.
+#'
+#' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
+#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @return Character SQL string.
+#' @keywords internal
+nct_recent_changes_sql <- function(con, lookback_days = 31L) {
+  glue::glue_sql(
+    '
+WITH
+{trialtracker:::with_scaffold("NCT", "NCTId", "NCT_Ids", lookback_days = {lookback_days}, con = con)},
+diffs AS (
+  SELECT
+    n."Program" AS "Program",
+    n."Guideline.number" AS "Guideline.number",
+    fs."Date Added",
+    n."URL" AS "URL",
+    n."Acronym" AS "Acronym",
+    n."BriefTitle" AS "Title",
+    n."Condition" AS "Condition",
+
+    CASE WHEN n."OverallStatus"      IS NOT o."OverallStatus"
+       AND (n."OverallStatus"      IS NOT NULL OR o."OverallStatus"      IS NOT NULL) THEN 1 ELSE 0 END AS "Status__changed",
+
+    CASE WHEN n."CompletionDate"     IS NOT o."CompletionDate"
+       AND (n."CompletionDate"     IS NOT NULL OR o."CompletionDate"     IS NOT NULL) THEN 1 ELSE 0 END AS "Completion Date__changed",
+
+    CASE WHEN n."LastUpdatePostDate" IS NOT o."LastUpdatePostDate"
+       AND (n."LastUpdatePostDate" IS NOT NULL OR o."LastUpdatePostDate" IS NOT NULL) THEN 1 ELSE 0 END AS "Last Update Date__changed",
+
+    n."OverallStatus"            AS "Status",
+    n."CompletionDate"           AS "Completion Date",
+    n."ResultsFirstSubmitDate"   AS "Results Submit Date",
+    n."LastUpdatePostDate"       AS "Last Update Date",
+    n."NCTId"                    AS "NCTId"
+  FROM n
+  INNER JOIN o USING("NCTId")              -- strict baseline: o must exist
+  LEFT JOIN first_seen fs USING("NCTId")
+)
+SELECT
+  "Yes" AS "Change",
+  RTRIM(
+    (CASE WHEN "Status__changed" = 1 THEN "Status, " ELSE "" END) ||
+    (CASE WHEN "Completion Date__changed" = 1 THEN "Completion Date, " ELSE "" END) ||
+    (CASE WHEN "Last Update Date__changed" = 1 THEN "Last Update Date, " ELSE "" END),
+    ", "
+  ) AS "Changed Field",
+  "Program","Guideline.number","Date Added","URL","NCTId","Acronym","Title","Condition",
+  "Status","Completion Date","Results Submit Date","Last Update Date"
+FROM diffs
+WHERE ("Status__changed" + "Completion Date__changed" + "Last Update Date__changed") > 0
+ORDER BY "Date Added" DESC, "NCTId";
+',
+    lookback_days = as.integer(lookback_days),
+    .con = con
+  ) |>
+    as.character()
+}
+
+
+#' Build SQL for “Recent Status Changes” (ISRCTN)
+#' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
+#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @return Character SQL string.
+#' @keywords internal
+isrctn_recent_changes_sql <- function(con, lookback_days = 31L) {
+  glue::glue_sql(
+    '
+WITH
+{trialtracker:::with_scaffold("ISRCTN", "ISRCTN_No", "ISRCTN_Ids", lookback_days = {lookback_days}, con = con)},
+diffs AS (
+  SELECT
+    n."Program"          AS "Program",
+    n."Guideline.number" AS "Guideline.number",
+    fs."Date Added"      AS "Date Added",
+    n."URL"              AS "URL",
+    n."Acronym"          AS "Acronym",
+    n."Scientific_Title" AS "Title",
+
+    CASE WHEN n."Recruitment_Status" IS NOT o."Recruitment_Status"
+      AND (n."Recruitment_Status" IS NOT NULL OR o."Recruitment_Status" IS NOT NULL) THEN 1 ELSE 0 END AS "Recruitment Status__changed",
+
+    CASE WHEN n."Results_url_link" IS NOT o."Results_url_link"
+      AND (n."Results_url_link" IS NOT NULL OR o."Results_url_link" IS NOT NULL) THEN 1 ELSE 0 END AS "Results URL__changed",
+
+    CASE WHEN n."Results_summary" IS NOT o."Results_summary"
+      AND (n."Results_summary" IS NOT NULL OR o."Results_summary" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Summary__changed",
+
+    CASE WHEN n."Results_date_completed" IS NOT o."Results_date_completed"
+      AND (n."Results_date_completed" IS NOT NULL OR o."Results_date_completed" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Completed__changed",
+
+    CASE WHEN n."Results_date_posted" IS NOT o."Results_date_posted"
+      AND (n."Results_date_posted" IS NOT NULL OR o."Results_date_posted" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Posted__changed",
+
+    CASE WHEN n."Results_date_first_publication" IS NOT o."Results_date_first_publication"
+      AND (n."Results_date_first_publication" IS NOT NULL OR o."Results_date_first_publication" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Published__changed",
+
+    n."Recruitment_Status"               AS "Recruitment Status",
+    n."Results_url_link"                 AS "Results URL",
+    n."Results_summary"                  AS "Results Summary",
+    n."Results_date_completed"           AS "Results Completed",
+    n."Results_date_posted"              AS "Results Posted",
+    n."Results_date_first_publication"   AS "Results Published",
+    n."ISRCTN_No"                        AS "ISRCTN_No"
+
+  FROM n
+  INNER JOIN o USING("ISRCTN_No")            -- strict baseline
+  LEFT JOIN first_seen fs USING("ISRCTN_No")
+)
+SELECT
+  "Yes" AS "Change",
+  RTRIM(
+    (CASE WHEN "Recruitment Status__changed" = 1 THEN "Recruitment Status, " ELSE "" END) ||
+    (CASE WHEN "Results URL__changed"        = 1 THEN "Results URL, "        ELSE "" END) ||
+    (CASE WHEN "Results Summary__changed"    = 1 THEN "Results Summary, "    ELSE "" END) ||
+    (CASE WHEN "Results Completed__changed"  = 1 THEN "Results Completed, "  ELSE "" END) ||
+    (CASE WHEN "Results Posted__changed"     = 1 THEN "Results Posted, "     ELSE "" END) ||
+    (CASE WHEN "Results Published__changed"  = 1 THEN "Results Published, "  ELSE "" END),
+    ", "
+  ) AS "Changed Field",
+  "Program","Guideline.number","Date Added","URL","ISRCTN_No","Acronym","Title",
+  "Recruitment Status","Results URL","Results Summary","Results Completed","Results Posted","Results Published"
+FROM diffs
+WHERE ("Recruitment Status__changed" + "Results URL__changed" + "Results Summary__changed" +
+       "Results Completed__changed" + "Results Posted__changed" + "Results Published__changed") > 0
+ORDER BY "Date Added" DESC, "ISRCTN_No";
+',
+    lookback_days = as.integer(lookback_days),
+    .con = con
+  ) |>
+    as.character()
+}
+
+
+#' Build SQL for “Recent Status Changes” (NIHR)
+#' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
+#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @return Character SQL string.
+#' @keywords internal
+nihr_recent_changes_sql <- function(con, lookback_days = 31L) {
+  glue::glue_sql(
+    '
+WITH
+{trialtracker:::with_scaffold("NIHR", "project_id", "NIHR_Ids", lookback_days = {lookback_days}, con = con)},
+diffs AS (
+  SELECT
+    n."Program"          AS "Program",
+    n."Guideline.number" AS "Guideline.number",
+    fs."Date Added"      AS "Date Added",
+    n."URL"              AS "URL",
+    n."project_title"    AS "Title",
+
+    CASE WHEN n."project_status" IS NOT o."project_status"
+      AND (n."project_status" IS NOT NULL OR o."project_status" IS NOT NULL) THEN 1 ELSE 0 END AS "Status__changed",
+
+    CASE WHEN n."end_date" IS NOT o."end_date"
+      AND (n."end_date" IS NOT NULL OR o."end_date" IS NOT NULL) THEN 1 ELSE 0 END AS "End Date__changed",
+
+    n."project_status" AS "Status",
+    n."end_date"       AS "End Date",
+    n."project_id"     AS "project_id"
+
+  FROM n
+  INNER JOIN o USING("project_id")          -- strict baseline
+  LEFT JOIN first_seen fs USING("project_id")
+)
+SELECT
+  "Yes" AS "Change",
+  RTRIM(
+    (CASE WHEN "Status__changed" = 1 THEN "Status, " ELSE "" END) ||
+    (CASE WHEN "End Date__changed" = 1 THEN "End Date, " ELSE "" END),
+    ", "
+  ) AS "Changed Field",
+  "Program","Guideline.number","Date Added","URL","project_id","Title","Status","End Date"
+FROM diffs
+WHERE ("Status__changed" + "End Date__changed") > 0
+ORDER BY "Date Added" DESC, "project_id";
+',
+    lookback_days = as.integer(lookback_days),
+    .con = con
+  ) |>
+    as.character()
+}
+
+
+#' Build SQL for “Recent Status Changes” (ClinicalTrialsEU)
+#' @param con DBI connection (or pool) used for identifier quoting in glue_sql.
+#' @param lookback_days Integer days to look back when selecting the “old” snapshot.
+#' @return Character SQL string.
+#' @keywords internal
+eu_recent_changes_sql <- function(con, lookback_days = 31L) {
+  glue::glue_sql(
+    '
+WITH
+{trialtracker:::with_scaffold("EU", "EU_Ids", "EU_Ids", lookback_days = {lookback_days}, con = con)},
+diffs AS (
+  SELECT
+    n."Program"          AS "Program",
+    n."Guideline.number" AS "Guideline.number",
+    fs."Date Added"      AS "Date Added",
+    n."URL"              AS "URL",
+    n."a32_name_or_abbreviated_title_of_the_trial_where_available" AS "Acronym",
+    n."a3_full_title_of_the_trial" AS "Title",
+
+    CASE WHEN n."p_end_of_trial_status" IS NOT o."p_end_of_trial_status"
+      AND (n."p_end_of_trial_status" IS NOT NULL OR o."p_end_of_trial_status" IS NOT NULL) THEN 1 ELSE 0 END AS "End of Trial Status__changed",
+
+    n."p_end_of_trial_status" AS "End of Trial Status",
+    n."EU_Ids" AS "EU_Ids"
+
+  FROM n
+  INNER JOIN o USING("EU_Ids")              -- strict baseline
+  LEFT JOIN first_seen fs USING("EU_Ids")
+)
+SELECT
+  "Yes" AS "Change",
+  RTRIM(
+    (CASE WHEN "End of Trial Status__changed" = 1 THEN "End of Trial Status, " ELSE "" END),
+    ", "
+  ) AS "Changed Field",
+  "Program","Guideline.number","Date Added","URL","EU_Ids","End of Trial Status","Acronym","Title"
+FROM diffs
+WHERE ("End of Trial Status__changed") > 0
+ORDER BY "Date Added" DESC, "EU_Ids";
+',
+    lookback_days = as.integer(lookback_days),
+    .con = con
+  ) |>
+    as.character()
+}

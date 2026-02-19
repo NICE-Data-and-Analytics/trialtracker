@@ -502,287 +502,31 @@ output$live_trial_table_eu <- DT::renderDT({
 ```
 
 ```{r ServerRecentStatusChanges, context="server", echo=FALSE}
-# --- shared ---
-cutoff_date <- Sys.Date() - 31L
-cutoff_str  <- format(cutoff_date, "%Y-%m-%d")
 
-# =========================
-# NCT (ClinicalTrialsGov)
-# =========================
-nct_sql <- glue::glue_sql('
-WITH
-{trialtracker:::with_scaffold("NCT", "NCTId", "NCT_Ids", con = pool_con)},
-diffs AS (
-  SELECT
-    n."Program" AS "Program",
-    n."Guideline.number" AS "Guideline.number",
-    fs."Date Added",
-    n."URL" AS "URL",
-    n."Acronym" AS "Acronym",
-    n."BriefTitle" AS "Title",
-    n."Condition" AS "Condition",
+nct_sql    <- trialtracker:::nct_recent_changes_sql(pool_con, lookback_days = 31L)
+isrctn_sql <- trialtracker:::isrctn_recent_changes_sql(pool_con, lookback_days = 31L)
+nihr_sql   <- trialtracker:::nihr_recent_changes_sql(pool_con, lookback_days = 31L)
+eu_sql     <- trialtracker:::eu_recent_changes_sql(pool_con, lookback_days = 31L)
 
-    CASE WHEN n."OverallStatus"      IS NOT o."OverallStatus"
-       AND (n."OverallStatus"      IS NOT NULL OR o."OverallStatus"      IS NOT NULL) THEN 1 ELSE 0 END AS "Status__changed",
-
-    CASE WHEN n."CompletionDate"     IS NOT o."CompletionDate"
-       AND (n."CompletionDate"     IS NOT NULL OR o."CompletionDate"     IS NOT NULL) THEN 1 ELSE 0 END AS "Completion Date__changed",
-
-    CASE WHEN n."LastUpdatePostDate" IS NOT o."LastUpdatePostDate"
-       AND (n."LastUpdatePostDate" IS NOT NULL OR o."LastUpdatePostDate" IS NOT NULL) THEN 1 ELSE 0 END AS "Last Update Date__changed",
-
-    n."OverallStatus"            AS "Status",
-    n."CompletionDate"           AS "Completion Date",
-    n."ResultsFirstSubmitDate"   AS "Results Submit Date",
-    n."LastUpdatePostDate"       AS "Last Update Date",
-    n."NCTId"                    AS "NCTId"
-  FROM n
-  INNER JOIN o USING("NCTId")              -- strict baseline: o must exist
-  LEFT JOIN first_seen fs USING("NCTId")
-)
-SELECT
-  "Yes" AS "Change",
-  RTRIM(
-    (CASE WHEN "Status__changed" = 1 THEN "Status, " ELSE "" END) ||
-    (CASE WHEN "Completion Date__changed" = 1 THEN "Completion Date, " ELSE "" END) ||
-    (CASE WHEN "Last Update Date__changed" = 1 THEN "Last Update Date, " ELSE "" END),
-    ", "
-  ) AS "Changed Field",
-  "Program","Guideline.number","Date Added","URL","NCTId","Acronym","Title","Condition",
-  "Status","Completion Date","Results Submit Date","Last Update Date"
-FROM diffs
-WHERE ("Status__changed" + "Completion Date__changed" + "Last Update Date__changed") > 0
-ORDER BY "Date Added" DESC, "NCTId";
-', .con = pool_con)
-
-# =========================
-# ISRCTN
-# =========================
-isrctn_sql <- glue::glue_sql('
-WITH
-{trialtracker:::with_scaffold("ISRCTN", "ISRCTN_No", "ISRCTN_Ids", con = pool_con)},
-diffs AS (
-  SELECT
-    n."Program"          AS "Program",
-    n."Guideline.number" AS "Guideline.number",
-    fs."Date Added"      AS "Date Added",
-    n."URL"              AS "URL",
-    n."Acronym"          AS "Acronym",
-    n."Scientific_Title" AS "Title",
-
-    CASE WHEN n."Recruitment_Status" IS NOT o."Recruitment_Status"
-      AND (n."Recruitment_Status" IS NOT NULL OR o."Recruitment_Status" IS NOT NULL) THEN 1 ELSE 0 END AS "Recruitment Status__changed",
-
-    CASE WHEN n."Results_url_link" IS NOT o."Results_url_link"
-      AND (n."Results_url_link" IS NOT NULL OR o."Results_url_link" IS NOT NULL) THEN 1 ELSE 0 END AS "Results URL__changed",
-
-    CASE WHEN n."Results_summary" IS NOT o."Results_summary"
-      AND (n."Results_summary" IS NOT NULL OR o."Results_summary" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Summary__changed",
-
-    CASE WHEN n."Results_date_completed" IS NOT o."Results_date_completed"
-      AND (n."Results_date_completed" IS NOT NULL OR o."Results_date_completed" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Completed__changed",
-
-    CASE WHEN n."Results_date_posted" IS NOT o."Results_date_posted"
-      AND (n."Results_date_posted" IS NOT NULL OR o."Results_date_posted" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Posted__changed",
-
-    CASE WHEN n."Results_date_first_publication" IS NOT o."Results_date_first_publication"
-      AND (n."Results_date_first_publication" IS NOT NULL OR o."Results_date_first_publication" IS NOT NULL) THEN 1 ELSE 0 END AS "Results Published__changed",
-
-    n."Recruitment_Status"               AS "Recruitment Status",
-    n."Results_url_link"                 AS "Results URL",
-    n."Results_summary"                  AS "Results Summary",
-    n."Results_date_completed"           AS "Results Completed",
-    n."Results_date_posted"              AS "Results Posted",
-    n."Results_date_first_publication"   AS "Results Published",
-    n."ISRCTN_No"                        AS "ISRCTN_No"
-
-  FROM n
-  INNER JOIN o USING("ISRCTN_No")            -- strict baseline
-  LEFT JOIN first_seen fs USING("ISRCTN_No")
-)
-SELECT
-  "Yes" AS "Change",
-  RTRIM(
-    (CASE WHEN "Recruitment Status__changed" = 1 THEN "Recruitment Status, " ELSE "" END) ||
-    (CASE WHEN "Results URL__changed"        = 1 THEN "Results URL, "        ELSE "" END) ||
-    (CASE WHEN "Results Summary__changed"    = 1 THEN "Results Summary, "    ELSE "" END) ||
-    (CASE WHEN "Results Completed__changed"  = 1 THEN "Results Completed, "  ELSE "" END) ||
-    (CASE WHEN "Results Posted__changed"     = 1 THEN "Results Posted, "     ELSE "" END) ||
-    (CASE WHEN "Results Published__changed"  = 1 THEN "Results Published, "  ELSE "" END),
-    ", "
-  ) AS "Changed Field",
-  "Program","Guideline.number","Date Added","URL","ISRCTN_No","Acronym","Title",
-  "Recruitment Status","Results URL","Results Summary","Results Completed","Results Posted","Results Published"
-FROM diffs
-WHERE ("Recruitment Status__changed" + "Results URL__changed" + "Results Summary__changed" +
-       "Results Completed__changed" + "Results Posted__changed" + "Results Published__changed") > 0
-ORDER BY "Date Added" DESC, "ISRCTN_No";
-', .con = pool_con)
-
-# =========================
-# NIHR
-# =========================
-nihr_sql <- glue::glue_sql('
-WITH
-{trialtracker:::with_scaffold("NIHR", "project_id", "NIHR_Ids", con = pool_con)},
-diffs AS (
-  SELECT
-    n."Program"          AS "Program",
-    n."Guideline.number" AS "Guideline.number",
-    fs."Date Added"      AS "Date Added",
-    n."URL"              AS "URL",
-    n."project_title"    AS "Title",
-
-    CASE WHEN n."project_status" IS NOT o."project_status"
-      AND (n."project_status" IS NOT NULL OR o."project_status" IS NOT NULL) THEN 1 ELSE 0 END AS "Status__changed",
-
-    CASE WHEN n."end_date" IS NOT o."end_date"
-      AND (n."end_date" IS NOT NULL OR o."end_date" IS NOT NULL) THEN 1 ELSE 0 END AS "End Date__changed",
-
-    n."project_status" AS "Status",
-    n."end_date"       AS "End Date",
-    n."project_id"     AS "project_id"
-
-  FROM n
-  INNER JOIN o USING("project_id")          -- strict baseline
-  LEFT JOIN first_seen fs USING("project_id")
-)
-SELECT
-  "Yes" AS "Change",
-  RTRIM(
-    (CASE WHEN "Status__changed" = 1 THEN "Status, " ELSE "" END) ||
-    (CASE WHEN "End Date__changed" = 1 THEN "End Date, " ELSE "" END),
-    ", "
-  ) AS "Changed Field",
-  "Program","Guideline.number","Date Added","URL","project_id","Title","Status","End Date"
-FROM diffs
-WHERE ("Status__changed" + "End Date__changed") > 0
-ORDER BY "Date Added" DESC, "project_id";
-', .con = pool_con)
-
-# =========================
-# ClinicalTrialsEU
-# =========================
-eu_sql <- glue::glue_sql('
-WITH
-{trialtracker:::with_scaffold("EU", "EU_Ids", "EU_Ids", con = pool_con)},
-diffs AS (
-  SELECT
-    n."Program"          AS "Program",
-    n."Guideline.number" AS "Guideline.number",
-    fs."Date Added"      AS "Date Added",
-    n."URL"              AS "URL",
-    n."a32_name_or_abbreviated_title_of_the_trial_where_available" AS "Acronym",
-    n."a3_full_title_of_the_trial" AS "Title",
-
-    CASE WHEN n."p_end_of_trial_status" IS NOT o."p_end_of_trial_status"
-      AND (n."p_end_of_trial_status" IS NOT NULL OR o."p_end_of_trial_status" IS NOT NULL) THEN 1 ELSE 0 END AS "End of Trial Status__changed",
-
-    n."p_end_of_trial_status" AS "End of Trial Status",
-    n."EU_Ids" AS "EU_Ids"
-
-  FROM n
-  INNER JOIN o USING("EU_Ids")              -- strict baseline
-  LEFT JOIN first_seen fs USING("EU_Ids")
-)
-SELECT
-  "Yes" AS "Change",
-  RTRIM(
-    (CASE WHEN "End of Trial Status__changed" = 1 THEN "End of Trial Status, " ELSE "" END),
-    ", "
-  ) AS "Changed Field",
-  "Program","Guideline.number","Date Added","URL","EU_Ids","End of Trial Status","Acronym","Title"
-FROM diffs
-WHERE ("End of Trial Status__changed") > 0
-ORDER BY "Date Added" DESC, "EU_Ids";
-', .con = pool_con)
-
-# --- renderers---
-render_nct <- function(sql_text) {
-
-  keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","NCT ID","Acronym","Title","Condition","Status","Completion Date","Results Submit Date","Last Update Date")
-
+# ---- Generic renderer for “Recent Status Changes” tables ----
+# Keeps index.Rmd DRY: run query safely, bail out on Error/empty, then format.
+render_recent_changes <- function(sql_text, label, formatter) {
   DT::renderDT({
-    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-    df <- trialtracker:::safe_db_getquery(pool_con, sql_text, label = "render_nct")
+    db_mtime()
+
+    df <- trialtracker:::safe_db_getquery(pool_con, sql_text, label = label)
     if ("Error" %in% names(df)) return(df)
     if (!nrow(df)) return(df)
-    df |>
-      dplyr::rename(Guideline = Guideline.number, `NCT ID` = NCTId) |>
-      dplyr::mutate(
-        URL = paste0("https://clinicaltrials.gov/ct2/show/", .data[["NCT ID"]]),
-        Title = trialtracker:::fast_trunc(.data[["Title"]], 80L),
-        Condition = trialtracker:::fast_trunc(.data[["Condition"]], 30L),
-        `Completion Date` = suppressWarnings(lubridate::ymd(`Completion Date`)),
-        `Last Update Date` = suppressWarnings(lubridate::ymd(`Last Update Date`)),
-        `Results Submit Date` = suppressWarnings(lubridate::ymd(`Results Submit Date`))
-      ) |>
-      dplyr::select(dplyr::all_of(keep_cols)) #|>
-      # dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top")
-}
 
-render_isrctn <- function(sql_text) {
-  
-  keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","ISRCTN","Acronym","Title","Recruitment Status","Results URL","Results Summary","Results Completed","Results Posted","Results Published")
-  
-  DT::renderDT({
-    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-    df <- trialtracker:::safe_db_getquery(pool_con, sql_text, label = "render_isrctn")
-    if ("Error" %in% names(df)) return(df)
-    if (!nrow(df)) return(df)
-    df |>
-      dplyr::rename(Guideline = Guideline.number, ISRCTN = ISRCTN_No) |>
-      dplyr::mutate(
-        Title = trialtracker:::fast_trunc(.data[["Title"]], 75L),
-        `Results Completed` = suppressWarnings(lubridate::dmy(`Results Completed`)),
-        `Results Posted`    = suppressWarnings(lubridate::dmy(`Results Posted`)),
-        `Results Published` = suppressWarnings(lubridate::dmy(`Results Published`))
-      ) |>
-      dplyr::select(dplyr::all_of(keep_cols)) #|>
-      #dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top")
-}
-
-render_nihr <- function(sql_text) {
-  
-  keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","NIHR ID","Title","Status","End Date")
-  
-  DT::renderDT({
-    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-    df <- trialtracker:::safe_db_getquery(pool_con, sql_text, label = "render_nihr")
-    if ("Error" %in% names(df)) return(df)
-    if (!nrow(df)) return(df)
-    df |>
-      dplyr::rename(Guideline = Guideline.number, `NIHR ID` = project_id) |>
-      dplyr::mutate(Title = trialtracker:::fast_trunc(.data[["Title"]], 90L)) |>
-      dplyr::select(dplyr::all_of(keep_cols)) #|>
-      #dplyr::distinct()
-  }, options = dt_opts_server, server = TRUE, filter = "top")
-}
-
-render_eu <- function(sql_text) {
-  
-  keep_cols <- c("Change","Changed Field","Program","Guideline","Date Added","URL","EU ID","End of Trial Status","Acronym","Title")
-  
-  DT::renderDT({
-    db_mtime()   # dependency only: forces re-run whenever sqlite file changes
-    df <- trialtracker:::safe_db_getquery(pool_con, sql_text, label = "render_eu")
-    if ("Error" %in% names(df)) return(df)
-    if (!nrow(df)) return(df)
-    df |>
-      dplyr::rename(Guideline = Guideline.number, `EU ID` = EU_Ids) |>
-      dplyr::mutate(Title = trialtracker:::fast_trunc(.data[["Title"]], 90L)) |>
-      dplyr::select(dplyr::all_of(keep_cols)) #|>
-      #dplyr::distinct()
+    formatter(df)
   }, options = dt_opts_server, server = TRUE, filter = "top")
 }
 
 # --- wire outputs ---
-output$nct_monthly_change              <- render_nct(nct_sql)
-output$isrctn_monthly_change           <- render_isrctn(isrctn_sql)
-output$nihr_monthly_change             <- render_nihr(nihr_sql)
-output$clinicaltrialseu_monthly_change <- render_eu(eu_sql)
+output$nct_monthly_change              <- render_recent_changes(nct_sql, "render_nct", trialtracker:::format_recent_changes_nct)
+output$isrctn_monthly_change           <- render_recent_changes(isrctn_sql, "render_isrctn", trialtracker:::format_recent_changes_isrctn)
+output$nihr_monthly_change             <- render_recent_changes(nihr_sql, "render_nihr", trialtracker:::format_recent_changes_nihr)
+output$clinicaltrialseu_monthly_change <- render_recent_changes(eu_sql, "render_eu", trialtracker:::format_recent_changes_eu)
 ```
 
 ```{r ServerNoChangesInLast6M, context = "server", echo = FALSE}
