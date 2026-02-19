@@ -19,7 +19,7 @@ trialtracker:::set_dashboard_log_file()
 
 # DB initialisation
 db_path_abs <- trialtracker:::resolve_db_path_in_app()
-pool_con <- trialtracker:::init_pool_with_pragmas(db_path_abs, log_fun = log_msg)
+pool_con <- trialtracker:::init_pool_with_pragmas(db_path_abs, log_fun = trialtracker:::log_msg)
 
 
 # DT options (server for big tables; client for smaller PubMed tables)
@@ -36,7 +36,7 @@ options(shiny.fullstacktrace = TRUE)
 options(shiny.error = function() {
   # geterrmessage() is a character string; safe to log
   msg <- tryCatch(geterrmessage(), error = function(e) "<could not read geterrmessage()>")
-  log_msg("SHINY ERROR:", msg)
+  trialtracker:::log_msg("SHINY ERROR:", msg)
 
   # capture something useful, but never risk crashing the handler itself
   try(utils::capture.output(sys.calls(), file = getOption("trialtracker.log_file"), append = TRUE), silent = TRUE)
@@ -686,7 +686,7 @@ archive_dt <- function(pool, table, rename_map, drop_cols = character()) {
     table = table,
     rename_map = rename_map,
     drop_cols = drop_cols,
-    log_fun = log_msg
+    log_fun = trialtracker:::log_msg
   )
 
   DT::datatable(
