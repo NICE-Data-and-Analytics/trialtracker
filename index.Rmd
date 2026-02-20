@@ -617,18 +617,17 @@ nochange_specs <- list(
 )
 
 # ---- wire outputs (loop) ----
-for (out_id in names(nochange_specs)) {
-  spec <- nochange_specs[[out_id]]
+for (out_id in names(nochange_specs)) local({
+  out_id_local <- out_id
+  spec_local   <- nochange_specs[[out_id_local]]
 
-  output[[out_id]] <- DT::renderDT({
-    db_mtime()  # dependency only: rerun whenever sqlite file mtime changes
+  output[[out_id_local]] <- DT::renderDT({
+    db_mtime()
 
-    # Call with only the args present in the spec (keeps defaults intact)
-    args <- c(list(conn = pool_con), spec)
-
+    args <- c(list(conn = pool_con), spec_local)
     do.call(trialtracker:::generate_nochange_table_sql, args)
   }, options = nochange_dt_opts, filter = "top")
-}
+})
 
 ```
 
@@ -763,21 +762,21 @@ archive_specs <- list(
 )
 
 # ---- wire outputs ----
-for (out_id in names(archive_specs)) {
-  spec <- archive_specs[[out_id]]
+for (out_id in names(archive_specs)) local({
+  out_id_local <- out_id
+  spec_local   <- archive_specs[[out_id_local]]
 
-  output[[out_id]] <- DT::renderDT({
-    db_mtime()  # rerun whenever sqlite file mtime changes (CRON, add/delete/archive)
+  output[[out_id_local]] <- DT::renderDT({
+    db_mtime()
 
     archive_dt(
       pool       = pool_con,
-      table      = spec$table,
-      rename_map = spec$rename_map,
-      drop_cols  = spec$drop_cols
+      table      = spec_local$table,
+      rename_map = spec_local$rename_map,
+      drop_cols  = spec_local$drop_cols
     )
   }, server = FALSE)
-}
-
+})
 ```
 
 ```{r ServerUserInteractions, context = "server", echo = FALSE}
