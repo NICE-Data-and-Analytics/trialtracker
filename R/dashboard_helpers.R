@@ -672,13 +672,23 @@ clean_utf8 <- function(x) enc2utf8(as.character(x))
 #' @param n Maximum number of characters to retain.
 #' @return Truncated character vector.
 #' @keywords internal
-fast_trunc <- function(x, n = 120L) {
-  # UI-only truncation, cheap
+
+fast_trunc <- function(x, n = 75L, ellipsis = "\u2026") {
+  # coerce and guard
+  n <- as.integer(n)[1L]
+  if (is.na(n) || n < 0L) {
+    stop("fast_trunc: `n` must be a non-negative integer")
+  }
   x <- as.character(x)
-  i <- nchar(x) > n
-  x[i] <- paste0(substr(x[i], 1L, n), "...")
+
+  # only truncate non-NA entries longer than n
+  idx <- which(!is.na(x) & nchar(x) > n)
+  if (length(idx)) {
+    x[idx] <- paste0(substr(x[idx], 1L, n), ellipsis)
+  }
   x
 }
+
 
 #' Clean PubMed metadata text for safe rendering
 #'
